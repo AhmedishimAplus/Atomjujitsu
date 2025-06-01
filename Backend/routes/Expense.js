@@ -2,10 +2,10 @@ const express = require('express');
 const router = express.Router();
 const Expense = require('../models/Expense');
 const auth = require('../middleware/auth');
-const adminAuth = require('../middleware/adminAuth');
 
-// Add expense (admin only)
-router.post('/', auth, adminAuth, async (req, res) => {
+
+// Add expense 
+router.post('/', auth, async (req, res) => {
     try {
         const { description, amount, category, date } = req.body;
         const expense = new Expense({
@@ -22,8 +22,8 @@ router.post('/', auth, adminAuth, async (req, res) => {
     }
 });
 
-// Get all expenses (admin only)
-router.get('/', auth, adminAuth, async (req, res) => {
+// Get all expenses 
+router.get('/', auth, async (req, res) => {
     try {
         const expenses = await Expense.find()
             .sort({ date: -1 })
@@ -34,8 +34,8 @@ router.get('/', auth, adminAuth, async (req, res) => {
     }
 });
 
-// Delete expense (admin only)
-router.delete('/:id', auth, adminAuth, async (req, res) => {
+// Delete expense 
+router.delete('/:id', auth, async (req, res) => {
     try {
         const expense = await Expense.findByIdAndDelete(req.params.id);
         if (!expense) {
@@ -46,5 +46,48 @@ router.delete('/:id', auth, adminAuth, async (req, res) => {
         res.status(500).json({ error: error.message });
     }
 });
+
+// Get monthly expenses (grouped by month)
+router.get('/monthly', auth, async (req, res) => {
+    try {
+        const monthlyExpenses = await Expense.aggregate([
+            {
+                $group: {
+                    _id: { year: { $year: "$date" }, month: { $month: "$date" } },
+                    total: { $sum: "$amount" },
+                    expenses: { $push: "$description" }
+                }
+            },
+            { $sort: { '_id.year': -1, '_id.month': -1 } }
+        ]);
+        res.json(monthlyExpenses);
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// Get weekly expenses (grouped by week)
+router.get('/weekly', auth, async (req, res) => {
+    try {
+        const weeklyExpenses = await Expense.aggregate([
+            {
+                $group: {
+                    _id: {
+                        year: { $year: "$date" },
+                        week: { $isoWeek: "$date" }
+                    },
+                    total: { $sum: "$amount" },
+                    expenses: { $push: "$description" }
+                }
+            },
+            { $sort: { '_id.year': -1, '_id.week': -1 } }
+        ]);
+        res.json(weeklyExpenses);
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+
 
 module.exports = router;
