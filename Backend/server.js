@@ -37,13 +37,11 @@ connectDB();
 // Routes
 const authRoutes = require('./routes/auth');
 const productRoutes = require('./routes/products');
-const ownerRoutes = require('./routes/owners');
 const purchaseRoutes = require('./routes/purchases');
 const categoryRoutes = require('./routes/categories');
 
 app.use('/api/auth', authRoutes);
 app.use('/api/products', productRoutes);
-app.use('/api/owners', ownerRoutes);
 app.use('/api/purchases', purchaseRoutes);
 app.use('/api/categories', categoryRoutes);
 

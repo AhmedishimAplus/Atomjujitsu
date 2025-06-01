@@ -6,7 +6,17 @@ const productSchema = new mongoose.Schema({
         required: true,
         trim: true
     },
-    price: {
+    costPrice: {
+        type: Number,
+        required: true,
+        min: 0
+    },
+    staffPrice:{
+        type: Number,
+        required: true,
+        min: 0
+    },
+    sellPrice:{
         type: Number,
         required: true,
         min: 0
@@ -17,10 +27,11 @@ const productSchema = new mongoose.Schema({
         min: 0,
         default: 0
     },
-    ownerId: {
-        type: mongoose.Schema.Types.ObjectId,
-        ref: 'Owner',
-        required: true
+    owner: {
+        type: String,
+        required: true,
+        enum: ['Owner 1', 'Owner 2'],
+        default: 'Owner 1'
     },
     categoryId: {
         type: mongoose.Schema.Types.ObjectId,
@@ -47,7 +58,7 @@ const productSchema = new mongoose.Schema({
 
 // Indexes for faster queries
 productSchema.index({ name: 1 });
-productSchema.index({ ownerId: 1 });
+productSchema.index({ owner: 1 });
 productSchema.index({ categoryId: 1 });
 productSchema.index({ subcategory: 1 });
 productSchema.index({ isAvailable: 1 });

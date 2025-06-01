@@ -13,17 +13,18 @@ const categorySchema = new mongoose.Schema({
             trim: true
         }
     }],
-    ownerId: {
-        type: mongoose.Schema.Types.ObjectId,
-        ref: 'Owner',
-        required: true
+    owner: {
+        type: String,
+        required: true,
+        enum: ['Owner 1', 'Owner 2'],
+        default: 'Owner 1'
     }
 }, {
     timestamps: true
 });
 
 // Indexes for faster queries
-categorySchema.index({ name: 1, ownerId: 1 }, { unique: true });
+categorySchema.index({ name: 1, owner: 1 }, { unique: true });
 
 const Category = mongoose.model('Category', categorySchema);
 module.exports = Category; 

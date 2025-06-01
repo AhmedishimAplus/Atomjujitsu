@@ -10,7 +10,6 @@ const router = express.Router();
 router.get('/', auth, async (req, res) => {
     try {
         const products = await Product.find()
-            .populate('ownerId', 'name')
             .populate('categoryId', 'name subcategories')
             .sort({ name: 1 });
         res.json(products);
@@ -20,10 +19,9 @@ router.get('/', auth, async (req, res) => {
 });
 
 // Get products by owner
-router.get('/owner/:ownerId', auth, async (req, res) => {
+router.get('/owner/:owner', auth, async (req, res) => {
     try {
-        const products = await Product.find({ ownerId: req.params.ownerId })
-            .populate('ownerId', 'name')
+        const products = await Product.find({ owner: req.params.owner })
             .populate('categoryId', 'name subcategories')
             .sort({ name: 1 });
         res.json(products);
@@ -36,9 +34,11 @@ router.get('/owner/:ownerId', auth, async (req, res) => {
 router.post('/', [
     auth,
     body('name').trim().notEmpty().withMessage('Name is required'),
-    body('price').isFloat({ min: 0 }).withMessage('Price must be a positive number'),
+    body('costPrice').isFloat({ min: 0 }).withMessage('Cost Price must be a positive number'),
+    body('staffPrice').isFloat({ min: 0 }).withMessage('Staff Price must be a positive number'),
+    body('sellPrice').isFloat({ min: 0 }).withMessage('Sell Price must be a positive number'),
     body('stock').isInt({ min: 0 }).withMessage('Stock must be a non-negative integer'),
-    body('ownerId').notEmpty().withMessage('Owner is required'),
+    body('owner').isIn(['Owner 1', 'Owner 2']).withMessage('Invalid owner'),
     body('categoryId').notEmpty().withMessage('Category is required'),
     body('subcategory').trim().notEmpty().withMessage('Subcategory is required'),
     body('description').optional().trim()
@@ -53,6 +53,11 @@ router.post('/', [
         const category = await Category.findById(req.body.categoryId);
         if (!category) {
             return res.status(400).json({ error: 'Category not found' });
+        }
+
+        // Verify owner matches category owner
+        if (category.owner !== req.body.owner) {
+            return res.status(400).json({ error: 'Product owner must match category owner' });
         }
 
         const subcategoryExists = category.subcategories.some(
@@ -66,9 +71,11 @@ router.post('/', [
 
         const product = new Product({
             name: req.body.name,
-            price: req.body.price,
+            costPrice: req.body.costPrice,
+            staffPrice: req.body.staffPrice,
+            sellPrice: req.body.sellPrice,
             stock: req.body.stock,
-            ownerId: req.body.ownerId,
+            owner: req.body.owner,
             categoryId: req.body.categoryId,
             subcategory: req.body.subcategory,
             description: req.body.description,
@@ -76,9 +83,8 @@ router.post('/', [
         });
 
         await product.save();
-        await product.populate('ownerId', 'name');
         await product.populate('categoryId', 'name subcategories');
-        res.status(201).json(product.name, product.stock, product.price, product.ownerId);
+        res.status(201).json(product);
     } catch (error) {
         res.status(500).json({ error: error.message });
     }
@@ -88,9 +94,11 @@ router.post('/', [
 router.put('/:id', [
     auth,
     body('name').trim().notEmpty().withMessage('Name is required'),
-    body('price').isFloat({ min: 0 }).withMessage('Price must be a positive number'),
+    body('costPrice').isFloat({ min: 0 }).withMessage('Cost Price must be a positive number'),
+    body('staffPrice').isFloat({ min: 0 }).withMessage('Staff Price must be a positive number'),
+    body('sellPrice').isFloat({ min: 0 }).withMessage('Sell Price must be a positive number'),
     body('stock').isInt({ min: 0 }).withMessage('Stock must be a non-negative integer'),
-    body('ownerId').notEmpty().withMessage('Owner is required'),
+    body('owner').isIn(['Owner 1', 'Owner 2']).withMessage('Invalid owner'),
     body('categoryId').notEmpty().withMessage('Category is required'),
     body('subcategory').trim().notEmpty().withMessage('Subcategory is required'),
     body('description').optional().trim()
@@ -107,6 +115,11 @@ router.put('/:id', [
             return res.status(400).json({ error: 'Category not found' });
         }
 
+        // Verify owner matches category owner
+        if (category.owner !== req.body.owner) {
+            return res.status(400).json({ error: 'Product owner must match category owner' });
+        }
+
         const subcategoryExists = category.subcategories.some(
             sub => sub.name === req.body.subcategory
         );
@@ -115,29 +128,30 @@ router.put('/:id', [
                 error: `Invalid subcategory. Must be one of: ${category.subcategories.map(s => s.name).join(', ')}`
             });
         }
+        
 
         const product = await Product.findByIdAndUpdate(
             req.params.id,
             {
                 name: req.body.name,
-                price: req.body.price,
+                costPrice: req.body.costPrice,
+                staffPrice: req.body.staffPrice,
+                sellPrice: req.body.sellPrice,
                 stock: req.body.stock,
-                ownerId: req.body.ownerId,
+                owner: req.body.owner,
                 categoryId: req.body.categoryId,
                 subcategory: req.body.subcategory,
                 description: req.body.description,
                 isAvailable: req.body.isAvailable !== false
             },
             { new: true }
-        )
-        .populate('ownerId', 'name')
-        .populate('categoryId', 'name subcategories');
+        ).populate('categoryId', 'name subcategories');
 
         if (!product) {
             return res.status(404).json({ error: 'Product not found' });
         }
 
-        res.json(product);
+        res.json(product.costPrice, product.staffPrice, product.sellPrice, product.stock, product.owner);
     } catch (error) {
         res.status(500).json({ error: 'Server error' });
     }
@@ -158,9 +172,7 @@ router.patch('/:id/stock', [
             req.params.id,
             { stock: req.body.stock },
             { new: true }
-        )
-        .populate('ownerId', 'name')
-        .populate('categoryId', 'name subcategories');
+        ).populate('categoryId', 'name subcategories');
 
         if (!product) {
             return res.status(404).json({ error: 'Product not found' });
