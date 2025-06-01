@@ -24,14 +24,12 @@ const userSchema = new mongoose.Schema({
         type: Boolean,
         default: false
     },
-    emailVerificationToken: String,
-    emailVerificationExpires: Date,
     twoFactorSecret: String,
     isTwoFactorEnabled: {
         type: Boolean,
         default: false
     },
-  
+
 }, {
     timestamps: true
 });

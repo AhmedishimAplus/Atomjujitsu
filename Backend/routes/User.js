@@ -8,6 +8,19 @@ const jwt = require('jsonwebtoken');
 const crypto = require('crypto');
 const { sendVerificationEmail, sendTwoFactorEmail } = require('../services/emailService');
 
+// In-memory OTP store (email -> {otp, expires})
+const otpStore = new Map();
+
+// Cleanup expired OTPs every 5 minutes
+setInterval(() => {
+    const now = Date.now();
+    for (const [email, data] of otpStore.entries()) {
+        if (data.expires < now) {
+            otpStore.delete(email);
+        }
+    }
+}, 5 * 60 * 1000);
+
 // Register new user
 router.post('/register', async (req, res) => {
     try {
@@ -19,21 +32,15 @@ router.post('/register', async (req, res) => {
             return res.status(400).json({ error: 'Email already registered' });
         }
 
-        // Create verification token
-        const emailVerificationToken = crypto.randomBytes(32).toString('hex');
-        const emailVerificationExpires = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
-
-        const user = new User({
-            name,
-            email,
-            password,
-            phone,
-            emailVerificationToken,
-            emailVerificationExpires
-        });
-
+        // Create and save user without OTP in DB
+        const user = new User({ name, email, password, phone });
         await user.save();
-        await sendVerificationEmail(email, emailVerificationToken);
+
+        // Generate OTP and store in memory
+        const otp = Math.floor(100000 + Math.random() * 900000).toString();
+        const expires = Date.now() + 10 * 60 * 1000; // 10 minutes
+        otpStore.set(email, { otp, expires });
+        await sendVerificationEmail(email, otp);
 
         res.status(201).json({
             message: 'Registration successful. Please check your email to verify your account.'
@@ -43,25 +50,24 @@ router.post('/register', async (req, res) => {
     }
 });
 
-// Verify email
-router.get('/verify-email/:token', async (req, res) => {
+// Verify email with OTP
+router.post('/verify-email', async (req, res) => {
     try {
-        const user = await User.findOne({
-            emailVerificationToken: req.params.token,
-            emailVerificationExpires: { $gt: Date.now() }
-        });
-
-        if (!user) {
-            return res.status(400).json({
-                error: 'Invalid or expired verification token'
-            });
+        const { email, otp } = req.body;
+        const data = otpStore.get(email);
+        if (!data || data.expires < Date.now()) {
+            return res.status(400).json({ error: 'Invalid or expired OTP' });
         }
-
+        if (data.otp !== otp) {
+            return res.status(400).json({ error: 'Invalid OTP' });
+        }
+        const user = await User.findOne({ email });
+        if (!user) {
+            return res.status(400).json({ error: 'User not found' });
+        }
         user.isEmailVerified = true;
-        user.emailVerificationToken = undefined;
-        user.emailVerificationExpires = undefined;
         await user.save();
-
+        otpStore.delete(email);
         res.json({ message: 'Email verified successfully' });
     } catch (error) {
         res.status(500).json({ error: error.message });
@@ -111,7 +117,7 @@ router.post('/login', async (req, res) => {
 
         // Generate JWT token
         const token = jwt.sign(
-            { id: user._id, email: user.email},
+            { id: user._id, email: user.email },
             process.env.JWT_SECRET,
             { expiresIn: '24h' }
         );
@@ -122,7 +128,7 @@ router.post('/login', async (req, res) => {
                 id: user._id,
                 name: user.name,
                 email: user.email,
-               
+
                 isTwoFactorEnabled: user.isTwoFactorEnabled
             }
         });
@@ -262,10 +268,13 @@ router.put('/update-profile', auth, async (req, res) => {
 
             user.email = email;
             user.isEmailVerified = false;
-            user.emailVerificationToken = crypto.randomBytes(32).toString('hex');
-            user.emailVerificationExpires = new Date(Date.now() + 24 * 60 * 60 * 1000);
 
-            await sendVerificationEmail(email, user.emailVerificationToken);
+            // Generate OTP and store in memory
+            const otp = Math.floor(100000 + Math.random() * 900000).toString();
+            const expires = Date.now() + 10 * 60 * 1000; // 10 minutes
+            otpStore.set(email, { otp, expires });
+
+            await sendVerificationEmail(email, otp);
         }
 
         // Handle password update
@@ -290,6 +299,35 @@ router.put('/update-profile', auth, async (req, res) => {
             message: 'Profile updated successfully',
             requiresEmailVerification: email && email !== user.email
         });
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// Resend email verification OTP
+router.post('/resend-verification', async (req, res) => {
+    try {
+        const { email } = req.body;
+
+        // Check if user exists
+        const user = await User.findOne({ email });
+        if (!user) {
+            return res.status(404).json({ error: 'User not found' });
+        }
+
+        // Check if already verified
+        if (user.isEmailVerified) {
+            return res.status(400).json({ error: 'Email already verified' });
+        }
+
+        // Generate new OTP and store in memory
+        const otp = Math.floor(100000 + Math.random() * 900000).toString();
+        const expires = Date.now() + 10 * 60 * 1000; // 10 minutes
+        otpStore.set(email, { otp, expires });
+
+        await sendVerificationEmail(email, otp);
+
+        res.json({ message: 'Verification email resent successfully' });
     } catch (error) {
         res.status(500).json({ error: error.message });
     }

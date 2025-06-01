@@ -8,18 +8,16 @@ const transporter = nodemailer.createTransport({
     }
 });
 
-const sendVerificationEmail = async (email, token) => {
-    const verificationUrl = `${process.env.FRONTEND_URL}/verify-email/${token}`;
-
+const sendVerificationEmail = async (email, otp) => {
     const mailOptions = {
         from: process.env.EMAIL_USER,
         to: email,
         subject: 'Email Verification - Atom Jujitsu',
         html: `
             <h1>Verify Your Email</h1>
-            <p>Please click the link below to verify your email address:</p>
-            <a href="${verificationUrl}">${verificationUrl}</a>
-            <p>This link will expire in 24 hours.</p>
+            <p>Your verification code is:</p>
+            <h2 style="letter-spacing: 4px;">${otp}</h2>
+            <p>This code will expire in 10 minutes.</p>
             <p>If you didn't create an account, please ignore this email.</p>
         `
     };
