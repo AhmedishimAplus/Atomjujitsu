@@ -11,9 +11,14 @@
   "license": "ISC",
   "description": "",
   "dependencies": {
+    "bcryptjs": "^3.0.2",
     "dotenv": "^16.5.0",
     "express": "^5.1.0",
-    "moongose": "^1.0.0"
+    "jsonwebtoken": "^9.0.2",
+    "moongose": "^1.0.0",
+    "nodemailer": "^7.0.3",
+    "qrcode": "^1.5.4",
+    "speakeasy": "^2.0.0"
   },
   "devDependencies": {
     "nodemon": "^3.1.10"

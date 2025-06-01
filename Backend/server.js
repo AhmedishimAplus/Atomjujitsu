@@ -9,19 +9,31 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-//const { mongo_url } = process.env.mongo_url;
-//console.log(`MongoDB URL: ${process.env.mongo_url}`);
 // MongoDB Connection
+mongoose.set('strictQuery', false);
 mongoose.connect(process.env.mongo_url, {
     useNewUrlParser: true,
     useUnifiedTopology: true
 })
-.then(() => console.log('Connected to MongoDB Atlas'))
-.catch(err => console.error('MongoDB connection error:', err));
+    .then(() => console.log('Connected to MongoDB Atlas'))
+    .catch(err => console.error('MongoDB connection error:', err));
 
 // Routes
+const userRoutes = require('./routes/User');
+app.use('/api/users', userRoutes);
+
+// Basic route
 app.get('/', (req, res) => {
     res.send('API is running');
+});
+
+// Error handling middleware
+app.use((err, req, res, next) => {
+    console.error(err.stack);
+    res.status(500).json({
+        error: 'Something broke!',
+        message: process.env.NODE_ENV === 'development' ? err.message : undefined
+    });
 });
 
 // Start Server
