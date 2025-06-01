@@ -51,7 +51,7 @@ router.post('/register', [
         });
     } catch (error) {
         console.error('Registration error:', error);
-        res.status(500).json({ error: 'Server error' });
+        res.status(500).json({ error: error.message });
     }
 });
 
@@ -92,7 +92,7 @@ router.post('/login', [
             }
         });
     } catch (error) {
-        res.status(500).json({ error: 'Server error' });
+        res.status(500).json({ error: error.message });
     }
 });
 

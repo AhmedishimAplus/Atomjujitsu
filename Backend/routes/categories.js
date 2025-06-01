@@ -11,7 +11,7 @@ router.get('/', auth, async (req, res) => {
         const categories = await Category.find().sort({ name: 1 });
         res.json(categories);
     } catch (error) {
-        res.status(500).json({ error: 'Server error' });
+        res.status(500).json({ error: error.message });
     }
 });
 
@@ -22,7 +22,7 @@ router.get('/owner/:owner', auth, async (req, res) => {
             .sort({ name: 1 });
         res.json(categories);
     } catch (error) {
-        res.status(500).json({ error: 'Server error' });
+        res.status(500).json({ error: error.message });
     }
 });
 
@@ -76,7 +76,7 @@ router.post('/', [
         await category.save();
         res.status(201).json(category);
     } catch (error) {
-        res.status(500).json({ error: 'Server error' });
+        res.status(500).json({ error: error.message });
     }
 });
 
@@ -119,7 +119,7 @@ router.put('/:id', [
 
         res.json(category);
     } catch (error) {
-        res.status(500).json({ error: 'Server error' });
+        res.status(500).json({ error: error.message });
     }
 });
 
@@ -133,7 +133,7 @@ router.delete('/:id', auth, async (req, res) => {
 
         res.json({ message: 'Category deleted successfully' });
     } catch (error) {
-        res.status(500).json({ error: 'Server error' });
+        res.status(500).json({ error: error.message });
     }
 });
 
@@ -171,7 +171,7 @@ router.post('/:id/subcategories', [
         
         res.json(category);
     } catch (error) {
-        res.status(500).json({ error: 'Server error' });
+        res.status(500).json({ error: error.message });
     }
 });
 
@@ -196,7 +196,7 @@ router.delete('/:id/subcategories/:subcategoryName', auth, async (req, res) => {
         
         res.json(category);
     } catch (error) {
-        res.status(500).json({ error: 'Server error' });
+        res.status(500).json({ error: error.message });
     }
 });
 

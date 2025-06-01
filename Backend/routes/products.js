@@ -14,7 +14,7 @@ router.get('/', auth, async (req, res) => {
             .sort({ name: 1 });
         res.json(products);
     } catch (error) {
-        res.status(500).json({ error: 'Server error' });
+        res.status(500).json({ error: error.message });
     }
 });
 
@@ -33,7 +33,7 @@ router.get('/:id', auth, async (req, res) => {
         if (error.kind === 'ObjectId') {
             return res.status(400).json({ error: 'Invalid product ID format' });
         }
-        res.status(500).json({ error: 'Server error' });
+        res.status(500).json({ error: error.message });
     }
 });
 
@@ -53,7 +53,7 @@ router.get('/owner/:owner', [
             .sort({ name: 1 });
         res.json(products);
     } catch (error) {
-        res.status(500).json({ error: 'Server error' });
+        res.status(500).json({ error: error.message });
     }
 });
 
@@ -180,7 +180,7 @@ router.put('/:id', [
 
         res.json(product.costPrice, product.staffPrice, product.sellPrice, product.stock, product.owner);
     } catch (error) {
-        res.status(500).json({ error: 'Server error' });
+        res.status(500).json({ error: error.message });
     }
 });
 
@@ -207,7 +207,7 @@ router.patch('/:id/stock', [
 
         res.json(product);
     } catch (error) {
-        res.status(500).json({ error: 'Server error' });
+        res.status(500).json({ error: error.message });
     }
 });
 
@@ -222,7 +222,7 @@ router.delete('/:id', auth, async (req, res) => {
 
         res.json({ message: 'Product deleted successfully' });
     } catch (error) {
-        res.status(500).json({ error: 'Server error' });
+        res.status(500).json({ error: error.message });
     }
 });
 
