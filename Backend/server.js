@@ -11,7 +11,7 @@ app.use(express.json());
 
 // MongoDB Connection
 mongoose.set('strictQuery', false);
-mongoose.connect(process.env.mongo_url, {
+mongoose.connect(process.env.MONGODB_URI, {
     useNewUrlParser: true,
     useUnifiedTopology: true
 })
@@ -19,19 +19,26 @@ mongoose.connect(process.env.mongo_url, {
     .catch(err => console.error('MongoDB connection error:', err));
 
 // Routes
-const userRoutes = require('./routes/User');
-app.use('/api/users', userRoutes);
+const authRoutes = require('./routes/auth');
+const productRoutes = require('./routes/products');
+const ownerRoutes = require('./routes/owners');
+const purchaseRoutes = require('./routes/purchases');
 
-// Basic route
+app.use('/api/auth', authRoutes);
+app.use('/api/products', productRoutes);
+app.use('/api/owners', ownerRoutes);
+app.use('/api/purchases', purchaseRoutes);
+
+// Basic health check route
 app.get('/', (req, res) => {
-    res.send('API is running');
+    res.json({ status: 'API is running' });
 });
 
 // Error handling middleware
 app.use((err, req, res, next) => {
     console.error(err.stack);
     res.status(500).json({
-        error: 'Something broke!',
+        error: 'Something went wrong!',
         message: process.env.NODE_ENV === 'development' ? err.message : undefined
     });
 });
