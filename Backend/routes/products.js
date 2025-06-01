@@ -18,9 +18,36 @@ router.get('/', auth, async (req, res) => {
     }
 });
 
-// Get products by owner
-router.get('/owner/:owner', auth, async (req, res) => {
+// Get product by ID
+router.get('/:id', auth, async (req, res) => {
     try {
+        const product = await Product.findById(req.params.id)
+            .populate('categoryId', 'name subcategories');
+        
+        if (!product) {
+            return res.status(404).json({ error: 'Product not found' });
+        }
+
+        res.json(product);
+    } catch (error) {
+        if (error.kind === 'ObjectId') {
+            return res.status(400).json({ error: 'Invalid product ID format' });
+        }
+        res.status(500).json({ error: 'Server error' });
+    }
+});
+
+// Get products by owner
+router.get('/owner/:owner', [
+    auth,
+    body('owner').isIn(['Owner 1', 'Owner 2']).withMessage('Invalid owner')
+], async (req, res) => {
+    try {
+        const errors = validationResult(req);
+        if (!errors.isEmpty()) {
+            return res.status(400).json({ errors: errors.array() });
+        }
+
         const products = await Product.find({ owner: req.params.owner })
             .populate('categoryId', 'name subcategories')
             .sort({ name: 1 });
