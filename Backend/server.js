@@ -35,6 +35,7 @@ mongoose.set('strictQuery', false);
 connectDB();
 
 // Routes
+
 const authRoutes = require('./routes/auth');
 const productRoutes = require('./routes/products');
 const purchaseRoutes = require('./routes/purchases');
@@ -44,6 +45,7 @@ app.use('/api/auth', authRoutes);
 app.use('/api/products', productRoutes);
 app.use('/api/purchases', purchaseRoutes);
 app.use('/api/categories', categoryRoutes);
+
 
 // Basic health check route
 app.get('/', (req, res) => {
