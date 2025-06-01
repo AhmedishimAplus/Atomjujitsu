@@ -1,6 +1,7 @@
 const express = require('express');
 const { body, validationResult } = require('express-validator');
 const Product = require('../models/Product');
+const Category = require('../models/Category');
 const auth = require('../middleware/auth');
 
 const router = express.Router();
@@ -10,6 +11,7 @@ router.get('/', auth, async (req, res) => {
     try {
         const products = await Product.find()
             .populate('ownerId', 'name')
+            .populate('categoryId', 'name subcategories')
             .sort({ name: 1 });
         res.json(products);
     } catch (error) {
@@ -22,6 +24,7 @@ router.get('/owner/:ownerId', auth, async (req, res) => {
     try {
         const products = await Product.find({ ownerId: req.params.ownerId })
             .populate('ownerId', 'name')
+            .populate('categoryId', 'name subcategories')
             .sort({ name: 1 });
         res.json(products);
     } catch (error) {
@@ -35,7 +38,10 @@ router.post('/', [
     body('name').trim().notEmpty().withMessage('Name is required'),
     body('price').isFloat({ min: 0 }).withMessage('Price must be a positive number'),
     body('stock').isInt({ min: 0 }).withMessage('Stock must be a non-negative integer'),
-    body('ownerId').notEmpty().withMessage('Owner is required')
+    body('ownerId').notEmpty().withMessage('Owner is required'),
+    body('categoryId').notEmpty().withMessage('Category is required'),
+    body('subcategory').trim().notEmpty().withMessage('Subcategory is required'),
+    body('description').optional().trim()
 ], async (req, res) => {
     try {
         const errors = validationResult(req);
@@ -43,18 +49,38 @@ router.post('/', [
             return res.status(400).json({ errors: errors.array() });
         }
 
+        // Verify that the subcategory exists in the category
+        const category = await Category.findById(req.body.categoryId);
+        if (!category) {
+            return res.status(400).json({ error: 'Category not found' });
+        }
+
+        const subcategoryExists = category.subcategories.some(
+            sub => sub.name === req.body.subcategory
+        );
+        if (!subcategoryExists) {
+            return res.status(400).json({ 
+                error: `Invalid subcategory. Must be one of: ${category.subcategories.map(s => s.name).join(', ')}`
+            });
+        }
+
         const product = new Product({
             name: req.body.name,
             price: req.body.price,
             stock: req.body.stock,
-            ownerId: req.body.ownerId
+            ownerId: req.body.ownerId,
+            categoryId: req.body.categoryId,
+            subcategory: req.body.subcategory,
+            description: req.body.description,
+            isAvailable: req.body.isAvailable !== false
         });
 
         await product.save();
         await product.populate('ownerId', 'name');
-        res.status(201).json(product);
+        await product.populate('categoryId', 'name subcategories');
+        res.status(201).json(product.name, product.stock, product.price, product.ownerId);
     } catch (error) {
-        res.status(500).json({ error: 'Server error' });
+        res.status(500).json({ error: error.message });
     }
 });
 
@@ -64,12 +90,30 @@ router.put('/:id', [
     body('name').trim().notEmpty().withMessage('Name is required'),
     body('price').isFloat({ min: 0 }).withMessage('Price must be a positive number'),
     body('stock').isInt({ min: 0 }).withMessage('Stock must be a non-negative integer'),
-    body('ownerId').notEmpty().withMessage('Owner is required')
+    body('ownerId').notEmpty().withMessage('Owner is required'),
+    body('categoryId').notEmpty().withMessage('Category is required'),
+    body('subcategory').trim().notEmpty().withMessage('Subcategory is required'),
+    body('description').optional().trim()
 ], async (req, res) => {
     try {
         const errors = validationResult(req);
         if (!errors.isEmpty()) {
             return res.status(400).json({ errors: errors.array() });
+        }
+
+        // Verify that the subcategory exists in the category
+        const category = await Category.findById(req.body.categoryId);
+        if (!category) {
+            return res.status(400).json({ error: 'Category not found' });
+        }
+
+        const subcategoryExists = category.subcategories.some(
+            sub => sub.name === req.body.subcategory
+        );
+        if (!subcategoryExists) {
+            return res.status(400).json({ 
+                error: `Invalid subcategory. Must be one of: ${category.subcategories.map(s => s.name).join(', ')}`
+            });
         }
 
         const product = await Product.findByIdAndUpdate(
@@ -78,10 +122,16 @@ router.put('/:id', [
                 name: req.body.name,
                 price: req.body.price,
                 stock: req.body.stock,
-                ownerId: req.body.ownerId
+                ownerId: req.body.ownerId,
+                categoryId: req.body.categoryId,
+                subcategory: req.body.subcategory,
+                description: req.body.description,
+                isAvailable: req.body.isAvailable !== false
             },
             { new: true }
-        ).populate('ownerId', 'name');
+        )
+        .populate('ownerId', 'name')
+        .populate('categoryId', 'name subcategories');
 
         if (!product) {
             return res.status(404).json({ error: 'Product not found' });
@@ -108,7 +158,9 @@ router.patch('/:id/stock', [
             req.params.id,
             { stock: req.body.stock },
             { new: true }
-        ).populate('ownerId', 'name');
+        )
+        .populate('ownerId', 'name')
+        .populate('categoryId', 'name subcategories');
 
         if (!product) {
             return res.status(404).json({ error: 'Product not found' });
