@@ -46,7 +46,7 @@ const staffRoutes = require('./routes/staff');
 const salesRoutes = require('./routes/sales');
 
 app.use('/api/auth', authRoutes);
-app.use('/api/users', userRoutes); // Add user route
+app.use('/api/user', userRoutes); // User route for authentication and profile management
 app.use('/api/expenses', expenseRoutes); // Add expenses route
 app.use('/api/products', productRoutes);
 app.use('/api/purchases', purchaseRoutes);

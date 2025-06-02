@@ -4,10 +4,11 @@ import InventoryManagement from './InventoryManagement';
 import FinancialTracking from './FinancialTracking';
 import AnalyticsDashboard from './AnalyticsDashboard';
 import StaffManagement from './StaffManagement';
+import ProfilePage from './ProfilePage';
 
 const AdminInterface: React.FC = () => {
   const { state } = useAppContext();
-  
+
   // Render the appropriate tab content
   const renderTabContent = () => {
     switch (state.adminTab) {
@@ -19,11 +20,13 @@ const AdminInterface: React.FC = () => {
         return <AnalyticsDashboard />;
       case 'staff':
         return <StaffManagement />;
+      case 'profile':
+        return <ProfilePage />;
       default:
         return <InventoryManagement />;
     }
   };
-  
+
   return (
     <div className="space-y-6">
       {renderTabContent()}

@@ -11,12 +11,12 @@ type AppState = {
   transactions: Transaction[];
   expenses: Expense[];
   activeView: 'cashier' | 'admin';
-  adminTab: 'inventory' | 'financial' | 'analytics' | 'staff';
+  adminTab: 'inventory' | 'financial' | 'analytics' | 'staff' | 'profile';
 };
 
 type AppAction =
   | { type: 'SET_VIEW'; payload: 'cashier' | 'admin' }
-  | { type: 'SET_ADMIN_TAB'; payload: 'inventory' | 'financial' | 'analytics' | 'staff' }
+  | { type: 'SET_ADMIN_TAB'; payload: 'inventory' | 'financial' | 'analytics' | 'staff' | 'profile' }
   | { type: 'ADD_TO_ORDER'; payload: { product: ProductItem; quantity: number; isStaffPrice: boolean } }
   | { type: 'REMOVE_FROM_ORDER'; payload: string }
   | { type: 'UPDATE_ORDER_ITEM_QUANTITY'; payload: { productId: string; quantity: number } }
@@ -59,24 +59,24 @@ function appReducer(state: AppState, action: AppAction): AppState {
         ...state,
         activeView: action.payload
       };
-    
+
     case 'SET_ADMIN_TAB':
       return {
         ...state,
         adminTab: action.payload
       };
-    
+
     case 'ADD_TO_ORDER': {
       const { product, quantity, isStaffPrice } = action.payload;
       const price = isStaffPrice ? product.staffPrice : product.regularPrice;
-      
+
       // Check if item already exists in order
       const existingItemIndex = state.currentOrder.items.findIndex(
         item => item.productId === product.id
       );
-      
+
       let updatedItems;
-      
+
       if (existingItemIndex >= 0) {
         // Update existing item quantity
         updatedItems = [...state.currentOrder.items];
@@ -96,13 +96,13 @@ function appReducer(state: AppState, action: AppAction): AppState {
           }
         ];
       }
-      
+
       // Calculate new total
       const total = updatedItems.reduce(
         (sum, item) => sum + item.price * item.quantity,
         0
       );
-      
+
       return {
         ...state,
         currentOrder: {
@@ -112,18 +112,18 @@ function appReducer(state: AppState, action: AppAction): AppState {
         }
       };
     }
-    
+
     case 'REMOVE_FROM_ORDER': {
       const updatedItems = state.currentOrder.items.filter(
         item => item.productId !== action.payload
       );
-      
+
       // Calculate new total
       const total = updatedItems.reduce(
         (sum, item) => sum + item.price * item.quantity,
         0
       );
-      
+
       return {
         ...state,
         currentOrder: {
@@ -133,27 +133,27 @@ function appReducer(state: AppState, action: AppAction): AppState {
         }
       };
     }
-    
+
     case 'UPDATE_ORDER_ITEM_QUANTITY': {
       const { productId, quantity } = action.payload;
-      
+
       if (quantity <= 0) {
         // Remove item if quantity is 0 or negative
         return appReducer(state, { type: 'REMOVE_FROM_ORDER', payload: productId });
       }
-      
+
       const updatedItems = state.currentOrder.items.map(item =>
         item.productId === productId
           ? { ...item, quantity }
           : item
       );
-      
+
       // Calculate new total
       const total = updatedItems.reduce(
         (sum, item) => sum + item.price * item.quantity,
         0
       );
-      
+
       return {
         ...state,
         currentOrder: {
@@ -163,13 +163,13 @@ function appReducer(state: AppState, action: AppAction): AppState {
         }
       };
     }
-    
+
     case 'SET_STAFF_DISCOUNT': {
       const { enabled, staffName = '' } = action.payload;
-      
+
       // If enabling staff discount, update prices to staff prices
       let updatedItems = [...state.currentOrder.items];
-      
+
       if (enabled) {
         updatedItems = updatedItems.map(item => {
           const product = state.inventory.find(p => p.id === item.productId);
@@ -194,13 +194,13 @@ function appReducer(state: AppState, action: AppAction): AppState {
           return item;
         });
       }
-      
+
       // Calculate new total
       const total = updatedItems.reduce(
         (sum, item) => sum + item.price * item.quantity,
         0
       );
-      
+
       return {
         ...state,
         currentOrder: {
@@ -212,7 +212,7 @@ function appReducer(state: AppState, action: AppAction): AppState {
         }
       };
     }
-    
+
     case 'COMPLETE_ORDER': {
       const { paymentMethod } = action.payload;
       const completedOrder: Order = {
@@ -221,7 +221,7 @@ function appReducer(state: AppState, action: AppAction): AppState {
         timestamp: new Date(),
         completed: true
       };
-      
+
       // Create transaction record
       const transaction: Transaction = {
         id: generateId(),
@@ -232,7 +232,7 @@ function appReducer(state: AppState, action: AppAction): AppState {
         staffDiscount: completedOrder.staffDiscount,
         staffName: completedOrder.staffName || undefined
       };
-      
+
       // Update inventory quantities
       const updatedInventory = state.inventory.map(product => {
         const orderItem = completedOrder.items.find(item => item.productId === product.id);
@@ -244,15 +244,15 @@ function appReducer(state: AppState, action: AppAction): AppState {
         }
         return product;
       });
-      
+
       // Update staff water bottle allowance if applicable
       let updatedStaffMembers = [...state.staffMembers];
-      
+
       if (completedOrder.staffDiscount && completedOrder.staffName) {
         const staffMember = updatedStaffMembers.find(
           staff => staff.name === completedOrder.staffName
         );
-        
+
         if (staffMember) {
           const largeWaterBottleItem = completedOrder.items.find(
             item => {
@@ -260,20 +260,20 @@ function appReducer(state: AppState, action: AppAction): AppState {
               return product && product.name === 'Large Water Bottle';
             }
           );
-          
+
           const smallWaterBottleItem = completedOrder.items.find(
             item => {
               const product = state.inventory.find(p => p.id === item.productId);
               return product && product.name === 'Small Water Bottle';
             }
           );
-          
+
           updatedStaffMembers = updatedStaffMembers.map(staff => {
             if (staff.id === staffMember.id) {
               return {
                 ...staff,
                 waterBottleAllowance: {
-                  large: largeWaterBottleItem 
+                  large: largeWaterBottleItem
                     ? Math.max(0, staff.waterBottleAllowance.large - largeWaterBottleItem.quantity)
                     : staff.waterBottleAllowance.large,
                   small: smallWaterBottleItem
@@ -286,7 +286,7 @@ function appReducer(state: AppState, action: AppAction): AppState {
           });
         }
       }
-      
+
       return {
         ...state,
         inventory: updatedInventory,
@@ -299,7 +299,7 @@ function appReducer(state: AppState, action: AppAction): AppState {
         staffMembers: updatedStaffMembers
       };
     }
-    
+
     case 'RESET_ORDER':
       return {
         ...state,
@@ -308,13 +308,13 @@ function appReducer(state: AppState, action: AppAction): AppState {
           id: generateId()
         }
       };
-    
+
     case 'ADD_PRODUCT':
       return {
         ...state,
         inventory: [...state.inventory, action.payload]
       };
-    
+
     case 'UPDATE_PRODUCT':
       return {
         ...state,
@@ -322,22 +322,22 @@ function appReducer(state: AppState, action: AppAction): AppState {
           product.id === action.payload.id ? action.payload : product
         )
       };
-    
+
     case 'REMOVE_PRODUCT':
       return {
         ...state,
         inventory: state.inventory.filter(product => product.id !== action.payload)
       };
-    
+
     case 'ADD_EXPENSE':
       return {
         ...state,
         expenses: [...state.expenses, action.payload]
       };
-    
+
     case 'UPDATE_WATER_BOTTLE_ALLOWANCE': {
       const { staffId, type, newAmount } = action.payload;
-      
+
       return {
         ...state,
         staffMembers: state.staffMembers.map(staff => {
@@ -354,7 +354,7 @@ function appReducer(state: AppState, action: AppAction): AppState {
         })
       };
     }
-    
+
     case 'RESET_ALLOWANCES':
       return {
         ...state,
@@ -366,7 +366,7 @@ function appReducer(state: AppState, action: AppAction): AppState {
           }
         }))
       };
-    
+
     default:
       return state;
   }
@@ -381,14 +381,14 @@ const AppContext = createContext<AppContextType | undefined>(undefined);
 
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [state, dispatch] = useReducer(appReducer, initialState);
-  
+
   // Check if water bottle allowances should be reset (on the 1st of each month)
   useEffect(() => {
     if (shouldResetAllowance()) {
       dispatch({ type: 'RESET_ALLOWANCES' });
     }
   }, []);
-  
+
   return (
     <AppContext.Provider value={{ state, dispatch }}>
       {children}
