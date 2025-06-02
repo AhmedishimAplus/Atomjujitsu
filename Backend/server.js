@@ -41,7 +41,8 @@ const productRoutes = require('./routes/products');
 const purchaseRoutes = require('./routes/purchases');
 const categoryRoutes = require('./routes/categories');
 const expenseRoutes = require('./routes/Expense');
-const userRoutes = require('./routes/User'); // Assuming you have a user route
+const userRoutes = require('./routes/User');
+const staffRoutes = require('./routes/staff'); 
 
 app.use('/api/auth', authRoutes);
 app.use('/api/users', userRoutes); // Add user route
@@ -49,6 +50,7 @@ app.use('/api/expenses', expenseRoutes); // Add expenses route
 app.use('/api/products', productRoutes);
 app.use('/api/purchases', purchaseRoutes);
 app.use('/api/categories', categoryRoutes);
+app.use('/api/staff', staffRoutes); // Add staff route
 
 
 // Basic health check route

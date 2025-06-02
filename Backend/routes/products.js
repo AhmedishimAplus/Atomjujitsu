@@ -23,7 +23,7 @@ router.get('/:id', auth, async (req, res) => {
     try {
         const product = await Product.findById(req.params.id)
             .populate('categoryId', 'name subcategories');
-        
+
         if (!product) {
             return res.status(404).json({ error: 'Product not found' });
         }
@@ -40,7 +40,7 @@ router.get('/:id', auth, async (req, res) => {
 // Get products by owner
 router.get('/owner/:owner', [
     auth,
-    body('owner').isIn(['Owner 1', 'Owner 2']).withMessage('Invalid owner')
+    body('owner').isIn(['Quarter', 'Sharoofa']).withMessage('Invalid owner')
 ], async (req, res) => {
     try {
         const errors = validationResult(req);
@@ -65,7 +65,7 @@ router.post('/', [
     body('staffPrice').isFloat({ min: 0 }).withMessage('Staff Price must be a positive number'),
     body('sellPrice').isFloat({ min: 0 }).withMessage('Sell Price must be a positive number'),
     body('stock').isInt({ min: 0 }).withMessage('Stock must be a non-negative integer'),
-    body('owner').isIn(['Owner 1', 'Owner 2']).withMessage('Invalid owner'),
+    body('owner').isIn(['Quarter', 'Sharoofa']).withMessage('Invalid owner'),
     body('categoryId').notEmpty().withMessage('Category is required'),
     body('subcategory').trim().notEmpty().withMessage('Subcategory is required'),
     body('description').optional().trim()
@@ -91,7 +91,7 @@ router.post('/', [
             sub => sub.name === req.body.subcategory
         );
         if (!subcategoryExists) {
-            return res.status(400).json({ 
+            return res.status(400).json({
                 error: `Invalid subcategory. Must be one of: ${category.subcategories.map(s => s.name).join(', ')}`
             });
         }
@@ -125,7 +125,7 @@ router.put('/:id', [
     body('staffPrice').isFloat({ min: 0 }).withMessage('Staff Price must be a positive number'),
     body('sellPrice').isFloat({ min: 0 }).withMessage('Sell Price must be a positive number'),
     body('stock').isInt({ min: 0 }).withMessage('Stock must be a non-negative integer'),
-    body('owner').isIn(['Owner 1', 'Owner 2']).withMessage('Invalid owner'),
+    body('owner').isIn(['Quarter', 'Sharoofa']).withMessage('Invalid owner'),
     body('categoryId').notEmpty().withMessage('Category is required'),
     body('subcategory').trim().notEmpty().withMessage('Subcategory is required'),
     body('description').optional().trim()
@@ -151,11 +151,11 @@ router.put('/:id', [
             sub => sub.name === req.body.subcategory
         );
         if (!subcategoryExists) {
-            return res.status(400).json({ 
+            return res.status(400).json({
                 error: `Invalid subcategory. Must be one of: ${category.subcategories.map(s => s.name).join(', ')}`
             });
         }
-        
+
 
         const product = await Product.findByIdAndUpdate(
             req.params.id,
@@ -215,7 +215,7 @@ router.patch('/:id/stock', [
 router.delete('/:id', auth, async (req, res) => {
     try {
         const product = await Product.findByIdAndDelete(req.params.id);
-        
+
         if (!product) {
             return res.status(404).json({ error: 'Product not found' });
         }

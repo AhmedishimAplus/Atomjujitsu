@@ -15,22 +15,10 @@ router.get('/', auth, async (req, res) => {
     }
 });
 
-// Get categories by owner
-router.get('/owner/:owner', auth, async (req, res) => {
-    try {
-        const categories = await Category.find({ owner: req.params.owner })
-            .sort({ name: 1 });
-        res.json(categories);
-    } catch (error) {
-        res.status(500).json({ error: error.message });
-    }
-});
-
 // Create category
 router.post('/', [
     auth,
     body('name').trim().notEmpty().withMessage('Category name is required'),
-    body('owner').isIn(['Owner 1', 'Owner 2']).withMessage('Invalid owner'),
     body('subcategories').isArray().withMessage('Subcategories must be an array'),
     body('subcategories.*.name').trim().notEmpty().withMessage('Subcategory name is required')
 ], async (req, res) => {
@@ -40,18 +28,17 @@ router.post('/', [
             return res.status(400).json({ errors: errors.array() });
         }
 
-        const { name, owner, subcategories } = req.body;
+        const { name, subcategories } = req.body;
 
-        // Check for duplicate category name for the same owner
-        const existingCategory = await Category.findOne({ 
-            name: { $regex: new RegExp(`^${name}$`, 'i') }, // Case-insensitive name check
-            owner 
+        // Check for duplicate category name
+        const existingCategory = await Category.findOne({
+            name: { $regex: new RegExp(`^${name}$`, 'i') } // Case-insensitive name check
         });
-        
+
         if (existingCategory) {
             // If category exists, update its subcategories instead
             const newSubcategories = [...existingCategory.subcategories];
-            
+
             // Add new subcategories that don't exist
             subcategories.forEach(newSub => {
                 const exists = newSubcategories.some(
@@ -69,7 +56,6 @@ router.post('/', [
 
         const category = new Category({
             name,
-            owner,
             subcategories
         });
 
@@ -84,7 +70,6 @@ router.post('/', [
 router.put('/:id', [
     auth,
     body('name').trim().notEmpty().withMessage('Category name is required'),
-    body('owner').isIn(['Owner 1', 'Owner 2']).withMessage('Invalid owner'),
     body('subcategories').isArray().withMessage('Subcategories must be an array'),
     body('subcategories.*.name').trim().notEmpty().withMessage('Subcategory name is required')
 ], async (req, res) => {
@@ -94,26 +79,24 @@ router.put('/:id', [
             return res.status(400).json({ errors: errors.array() });
         }
 
-        const { name, owner, subcategories } = req.body;
+        const { name, subcategories } = req.body;
 
         const category = await Category.findById(req.params.id);
         if (!category) {
             return res.status(404).json({ error: 'Category not found' });
         }
 
-        // Check for duplicate category name for the same owner
+        // Check for duplicate category name
         const existingCategory = await Category.findOne({
             name: { $regex: new RegExp(`^${name}$`, 'i') },
-            owner,
             _id: { $ne: category._id }
         });
-        
+
         if (existingCategory) {
-            return res.status(400).json({ error: 'Category name already exists for this owner' });
+            return res.status(400).json({ error: 'Category name already exists' });
         }
 
         category.name = name;
-        category.owner = owner;
         category.subcategories = subcategories;
         await category.save();
 
@@ -155,7 +138,7 @@ router.post('/:id/subcategories', [
         }
 
         const newSubcategories = [...category.subcategories];
-        
+
         // Add new subcategories that don't exist
         req.body.subcategories.forEach(newSub => {
             const exists = newSubcategories.some(
@@ -168,7 +151,7 @@ router.post('/:id/subcategories', [
 
         category.subcategories = newSubcategories;
         await category.save();
-        
+
         res.json(category);
     } catch (error) {
         res.status(500).json({ error: error.message });
@@ -193,11 +176,11 @@ router.delete('/:id/subcategories/:subcategoryName', auth, async (req, res) => {
 
         category.subcategories.splice(subcategoryIndex, 1);
         await category.save();
-        
+
         res.json(category);
     } catch (error) {
         res.status(500).json({ error: error.message });
     }
 });
 
-module.exports = router; 
+module.exports = router;

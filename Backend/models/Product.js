@@ -26,12 +26,11 @@ const productSchema = new mongoose.Schema({
         required: true,
         min: 0,
         default: 0
-    },
-    owner: {
+    },    owner: {
         type: String,
         required: true,
-        enum: ['Owner 1', 'Owner 2'],
-        default: 'Owner 1'
+        enum: ['Quarter', 'Sharoofa'],
+        default: 'Quarter'
     },
     categoryId: {
         type: mongoose.Schema.Types.ObjectId,
