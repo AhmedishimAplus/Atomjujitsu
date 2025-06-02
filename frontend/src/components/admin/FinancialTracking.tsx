@@ -283,7 +283,7 @@ const FinancialTracking: React.FC = () => {
               type="number"
               label="Amount"
               name="amount"
-              value={expenseData.amount}
+              value={typeof expenseData.amount === 'number' && !isNaN(expenseData.amount) ? expenseData.amount : ''}
               onChange={handleInputChange}
               fullWidth
               step="0.01"

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useAppContext } from '../../context/AppContext';
 import { Card, CardHeader, CardBody, CardFooter } from '../ui/Card';
 import Button from '../ui/Button';
@@ -8,6 +8,7 @@ import Modal from '../ui/Modal';
 import { ProductItem } from '../../types';
 import { formatCurrency } from '../../utils/helpers';
 import { Minus, Plus, Trash2, Check, X, DollarSign, CreditCard } from 'lucide-react';
+import { getProducts, getCategories } from '../../services/api';
 
 const CashierInterface: React.FC = () => {
   const { state, dispatch } = useAppContext();
@@ -16,21 +17,30 @@ const CashierInterface: React.FC = () => {
   const [receiptModalOpen, setReceiptModalOpen] = useState(false);
   const [paymentMethod, setPaymentMethod] = useState<'InstaPay' | 'Cash'>('Cash');
   const [staffName, setStaffName] = useState('');
-  
+  const [products, setProducts] = useState<any[]>([]);
+  const [categories, setCategories] = useState<any[]>([]);
+
+  useEffect(() => {
+    getProducts().then(setProducts);
+    getCategories().then(setCategories);
+  }, []);
+
   // Filter products based on search term
-  const filteredProducts = state.inventory.filter(product =>
+  const filteredProducts = products.filter(product =>
     product.name.toLowerCase().includes(searchTerm.toLowerCase())
   );
-  
-  // Group products by category
-  const productsByCategory = filteredProducts.reduce((acc, product) => {
-    if (!acc[product.category]) {
-      acc[product.category] = [];
-    }
-    acc[product.category].push(product);
-    return acc;
-  }, {} as Record<string, ProductItem[]>);
-  
+
+  // Group products by category and subcategory
+  const productsByCategory: Record<string, Record<string, any[]>> = {};
+  filteredProducts.forEach(product => {
+    const cat = categories.find((c: any) => c._id === product.categoryId);
+    const catName = cat ? cat.name : 'Uncategorized';
+    const subcatName = product.subcategory || 'Uncategorized';
+    if (!productsByCategory[catName]) productsByCategory[catName] = {};
+    if (!productsByCategory[catName][subcatName]) productsByCategory[catName][subcatName] = [];
+    productsByCategory[catName][subcatName].push(product);
+  });
+
   // Handle adding item to order
   const handleAddItem = (product: ProductItem) => {
     dispatch({
@@ -42,7 +52,7 @@ const CashierInterface: React.FC = () => {
       }
     });
   };
-  
+
   // Handle removing item from order
   const handleRemoveItem = (productId: string) => {
     dispatch({
@@ -50,7 +60,7 @@ const CashierInterface: React.FC = () => {
       payload: productId
     });
   };
-  
+
   // Handle updating item quantity
   const handleUpdateQuantity = (productId: string, newQuantity: number) => {
     dispatch({
@@ -61,7 +71,7 @@ const CashierInterface: React.FC = () => {
       }
     });
   };
-  
+
   // Handle staff discount toggle
   const handleStaffDiscountToggle = (enabled: boolean) => {
     dispatch({
@@ -72,7 +82,7 @@ const CashierInterface: React.FC = () => {
       }
     });
   };
-  
+
   // Handle staff name change
   const handleStaffNameChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setStaffName(e.target.value);
@@ -86,7 +96,7 @@ const CashierInterface: React.FC = () => {
       });
     }
   };
-  
+
   // Handle payment
   const handlePayment = () => {
     dispatch({
@@ -98,14 +108,14 @@ const CashierInterface: React.FC = () => {
     setPaymentModalOpen(false);
     setReceiptModalOpen(true);
   };
-  
+
   // Handle closing receipt and resetting
   const handleCloseReceipt = () => {
     setReceiptModalOpen(false);
     setStaffName('');
     setPaymentMethod('Cash');
   };
-  
+
   return (
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
       {/* Products Section */}
@@ -119,47 +129,52 @@ const CashierInterface: React.FC = () => {
             fullWidth
           />
         </div>
-        
-        {Object.entries(productsByCategory).map(([category, products]) => (
+
+        {Object.entries(productsByCategory).map(([category, subcats]) => (
           <div key={category} className="mb-6">
             <h2 className="text-lg font-semibold text-gray-800 mb-3">{category}</h2>
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
-              {products.map((product) => (
-                <Card key={product.id} className="transform transition-transform duration-200 hover:scale-105">
-                  <CardBody className="p-4">
-                    <h3 className="font-medium text-gray-800">{product.name}</h3>
-                    <p className="text-sm text-gray-500 mb-2">
-                      {state.currentOrder.staffDiscount
-                        ? formatCurrency(product.staffPrice)
-                        : formatCurrency(product.regularPrice)}
-                    </p>
-                    <p className="text-xs text-gray-500 mb-4">
-                      Available: {product.quantity}
-                    </p>
-                    <Button
-                      variant="primary"
-                      size="sm"
-                      fullWidth
-                      onClick={() => handleAddItem(product)}
-                      disabled={product.quantity === 0}
-                    >
-                      Add to Order
-                    </Button>
-                  </CardBody>
-                </Card>
-              ))}
-            </div>
+            {Object.entries(subcats).map(([subcat, prods]) => (
+              <div key={subcat} className="mb-4">
+                <h3 className="text-md font-medium text-gray-700 mb-2">{subcat}</h3>
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+                  {prods.map((product) => (
+                    <Card key={product._id} className="transform transition-transform duration-200 hover:scale-105">
+                      <CardBody className="p-4">
+                        <h3 className="font-medium text-gray-800">{product.name}</h3>
+                        <p className="text-sm text-gray-500 mb-2">
+                          {state.currentOrder.staffDiscount
+                            ? formatCurrency(product.staffPrice)
+                            : formatCurrency(product.sellPrice)}
+                        </p>
+                        <p className="text-xs text-gray-500 mb-4">
+                          Available: {product.stock}
+                        </p>
+                        <Button
+                          variant="primary"
+                          size="sm"
+                          fullWidth
+                          onClick={() => handleAddItem(product)}
+                          disabled={product.stock === 0}
+                        >
+                          Add to Order
+                        </Button>
+                      </CardBody>
+                    </Card>
+                  ))}
+                </div>
+              </div>
+            ))}
           </div>
         ))}
       </div>
-      
+
       {/* Order Section */}
       <div>
         <Card className="sticky top-4">
           <CardHeader>
             <h2 className="text-lg font-semibold text-gray-800">Current Order</h2>
           </CardHeader>
-          
+
           <CardBody className="max-h-[calc(100vh-300px)] overflow-y-auto">
             {state.currentOrder.items.length === 0 ? (
               <div className="text-center py-8 text-gray-500">
@@ -204,7 +219,7 @@ const CashierInterface: React.FC = () => {
               </div>
             )}
           </CardBody>
-          
+
           <CardFooter className="border-t border-gray-200 bg-gray-50">
             <div className="w-full space-y-4">
               <div className="flex items-center justify-between">
@@ -217,7 +232,7 @@ const CashierInterface: React.FC = () => {
                   {formatCurrency(state.currentOrder.total)}
                 </p>
               </div>
-              
+
               {state.currentOrder.staffDiscount && (
                 <Input
                   placeholder="Staff Name"
@@ -226,7 +241,7 @@ const CashierInterface: React.FC = () => {
                   fullWidth
                 />
               )}
-              
+
               <div className="flex space-x-2">
                 <Button
                   variant="outline"
@@ -248,7 +263,7 @@ const CashierInterface: React.FC = () => {
           </CardFooter>
         </Card>
       </div>
-      
+
       {/* Payment Modal */}
       <Modal
         isOpen={paymentModalOpen}
@@ -278,7 +293,7 @@ const CashierInterface: React.FC = () => {
               </Button>
             </div>
           </div>
-          
+
           <div className="border-t border-gray-200 pt-4">
             <div className="flex justify-between mb-2">
               <span className="font-medium">Subtotal:</span>
@@ -295,7 +310,7 @@ const CashierInterface: React.FC = () => {
               <span>{formatCurrency(state.currentOrder.total)}</span>
             </div>
           </div>
-          
+
           <div className="flex space-x-3">
             <Button
               variant="outline"
@@ -316,7 +331,7 @@ const CashierInterface: React.FC = () => {
           </div>
         </div>
       </Modal>
-      
+
       {/* Receipt Modal */}
       <Modal
         isOpen={receiptModalOpen}
@@ -329,7 +344,7 @@ const CashierInterface: React.FC = () => {
             <h3 className="font-bold text-xl">RECEIPT</h3>
             <p className="text-gray-500 text-sm">{new Date().toLocaleString()}</p>
           </div>
-          
+
           <div className="space-y-2">
             {state.completedOrders[state.completedOrders.length - 1]?.items.map((item, index) => (
               <div key={index} className="flex justify-between">
@@ -340,7 +355,7 @@ const CashierInterface: React.FC = () => {
               </div>
             ))}
           </div>
-          
+
           <div className="border-t border-gray-200 pt-2 mt-2">
             {state.completedOrders[state.completedOrders.length - 1]?.staffDiscount && (
               <div className="flex justify-between text-blue-600 text-sm">
@@ -359,7 +374,7 @@ const CashierInterface: React.FC = () => {
               <span>{state.completedOrders[state.completedOrders.length - 1]?.paymentMethod}</span>
             </div>
           </div>
-          
+
           <div className="border-t border-gray-200 pt-4 text-center">
             <p className="text-sm text-gray-500">Thank you for your purchase!</p>
             <Button

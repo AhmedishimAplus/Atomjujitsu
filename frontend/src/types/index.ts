@@ -3,13 +3,16 @@
 export type ProductItem = {
   id: string;
   name: string;
-  regularPrice: number;
   staffPrice: number;
-  purchaseCost: number;
-  quantity: number;
-  reorderThreshold: number;
-  category: string;
-  image?: string;
+  sellPrice: number;
+  costPrice?: number;
+  stock: number;
+  owner: 'Quarter' | 'Sharoofa';
+  categoryId: string;
+  categoryName?: string;
+  subcategory: string;
+  description?: string;
+  isAvailable: boolean;
 };
 
 export type OrderItem = {
