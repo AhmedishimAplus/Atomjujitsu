@@ -54,8 +54,7 @@ router.get('/monthly', auth, async (req, res) => {
             {
                 $group: {
                     _id: { year: { $year: "$date" }, month: { $month: "$date" } },
-                    total: { $sum: "$amount" },
-                    expenses: { $push: "$description" }
+                    total: { $sum: "$amount" }
                 }
             },
             { $sort: { '_id.year': -1, '_id.month': -1 } }
@@ -76,13 +75,115 @@ router.get('/weekly', auth, async (req, res) => {
                         year: { $year: "$date" },
                         week: { $isoWeek: "$date" }
                     },
-                    total: { $sum: "$amount" },
-                    expenses: { $push: "$description" }
+                    total: { $sum: "$amount" }
                 }
             },
             { $sort: { '_id.year': -1, '_id.week': -1 } }
         ]);
         res.json(weeklyExpenses);
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// Get current month's total expenses
+router.get('/current-month-total', auth, async (req, res) => {
+    try {
+        const now = new Date();
+        const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+        const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999);
+
+        const result = await Expense.aggregate([
+            {
+                $match: {
+                    date: { $gte: startOfMonth, $lte: endOfMonth }
+                }
+            },
+            {
+                $group: {
+                    _id: null,
+                    total: { $sum: "$amount" }
+                }
+            }
+        ]);
+
+        const total = result.length > 0 ? result[0].total : 0;
+        res.json({
+            total,
+            period: {
+                start: startOfMonth,
+                end: endOfMonth
+            }
+        });
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// Get current week's total expenses (weeks end on Friday and reset on 1st of each month)
+router.get('/current-week-total', auth, async (req, res) => {
+    try {
+        const now = new Date();
+
+        // Check if it's a new month (1st of the month) - if so, we'll only count from the 1st
+        const isFirstOfMonth = now.getDate() === 1;
+        let startOfWeek;
+
+        if (isFirstOfMonth) {
+            // If it's 1st of month, start count from today
+            startOfWeek = new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0, 0);
+        } else {
+            // Find the most recent Monday (1 = Monday in getDay() when using ISO weekday)
+            const dayOfWeek = now.getDay() || 7; // Convert Sunday (0) to 7 for ISO weekday
+            const daysFromMonday = dayOfWeek - 1; // Monday is 1 in ISO
+
+            startOfWeek = new Date(now);
+            startOfWeek.setDate(now.getDate() - daysFromMonday);
+            startOfWeek.setHours(0, 0, 0, 0);
+
+            // If startOfWeek is in the previous month, and we're not on the 1st,
+            // then we need to set it to the 1st of current month
+            if (startOfWeek.getMonth() !== now.getMonth()) {
+                startOfWeek = new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0, 0);
+            }
+        }
+
+        // End of week is Friday (5 = Friday in getDay()) or the current day if before Friday
+        let endOfWeek;
+        const fridayOfWeek = new Date(startOfWeek);
+        const daysUntilFriday = 5 - startOfWeek.getDay(); // 5 = Friday
+        fridayOfWeek.setDate(startOfWeek.getDate() + (daysUntilFriday >= 0 ? daysUntilFriday : daysUntilFriday + 7));
+        fridayOfWeek.setHours(23, 59, 59, 999);
+
+        // If today is before Friday, use today as the end date
+        if (now < fridayOfWeek) {
+            endOfWeek = new Date(now);
+            endOfWeek.setHours(23, 59, 59, 999);
+        } else {
+            endOfWeek = fridayOfWeek;
+        }
+        const result = await Expense.aggregate([
+            {
+                $match: {
+                    date: { $gte: startOfWeek, $lte: endOfWeek }
+                }
+            },
+            {
+                $group: {
+                    _id: null,
+                    total: { $sum: "$amount" }
+                }
+            }
+        ]);
+
+        const total = result.length > 0 ? result[0].total : 0;
+        res.json({
+            total,
+            period: {
+                start: startOfWeek,
+                end: endOfWeek
+            }
+        });
     } catch (error) {
         res.status(500).json({ error: error.message });
     }
