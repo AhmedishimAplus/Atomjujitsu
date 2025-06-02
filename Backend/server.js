@@ -9,7 +9,7 @@ const app = express();
 const corsOptions = {
     origin: process.env.NODE_ENV === 'production'
         ? ['https://your-frontend-domain.vercel.app'] // Replace with your Vercel frontend domain
-        : 'http://localhost:3000',
+        : 'http://localhost:5173', // Vite's default port
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH'],
     allowedHeaders: ['Content-Type', 'Authorization']
@@ -35,7 +35,6 @@ mongoose.set('strictQuery', false);
 connectDB();
 
 // Routes
-
 const authRoutes = require('./routes/auth');
 const productRoutes = require('./routes/products');
 const purchaseRoutes = require('./routes/purchases');
@@ -46,14 +45,13 @@ const staffRoutes = require('./routes/staff');
 const salesRoutes = require('./routes/sales');
 
 app.use('/api/auth', authRoutes);
-app.use('/api/users', userRoutes); // Add user route
-app.use('/api/expenses', expenseRoutes); // Add expenses route
+app.use('/api/users', userRoutes);
+app.use('/api/expenses', expenseRoutes);
 app.use('/api/products', productRoutes);
 app.use('/api/purchases', purchaseRoutes);
 app.use('/api/categories', categoryRoutes);
-app.use('/api/staff', staffRoutes); // Add staff route
-app.use('/api/sales', salesRoutes); // Add sales route
-
+app.use('/api/staff', staffRoutes);
+app.use('/api/sales', salesRoutes);
 
 // Basic health check route
 app.get('/', (req, res) => {
