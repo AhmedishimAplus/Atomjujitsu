@@ -61,14 +61,14 @@ router.get('/owner/:owner', [
 router.post('/', [
     auth,
     body('name').trim().notEmpty().withMessage('Name is required'),
-    body('costPrice').isFloat({ min: 0 }).withMessage('Cost Price must be a positive number'),
     body('staffPrice').isFloat({ min: 0 }).withMessage('Staff Price must be a positive number'),
     body('sellPrice').isFloat({ min: 0 }).withMessage('Sell Price must be a positive number'),
     body('stock').isInt({ min: 0 }).withMessage('Stock must be a non-negative integer'),
     body('owner').isIn(['Quarter', 'Sharoofa']).withMessage('Invalid owner'),
     body('categoryId').notEmpty().withMessage('Category is required'),
     body('subcategory').trim().notEmpty().withMessage('Subcategory is required'),
-    body('description').optional().trim()
+    body('description').optional().trim(),
+    body('costPrice').optional().isFloat({ min: 0 }).withMessage('Cost Price must be a positive number')
 ], async (req, res) => {
     try {
         const errors = validationResult(req);
@@ -96,9 +96,9 @@ router.post('/', [
             });
         }
 
-        const product = new Product({
+        // Create product object with basic properties
+        const productData = {
             name: req.body.name,
-            costPrice: req.body.costPrice,
             staffPrice: req.body.staffPrice,
             sellPrice: req.body.sellPrice,
             stock: req.body.stock,
@@ -107,7 +107,17 @@ router.post('/', [
             subcategory: req.body.subcategory,
             description: req.body.description,
             isAvailable: req.body.isAvailable !== false
-        });
+        };
+
+        // Only include costPrice for Quarter products
+        if (req.body.owner === 'Quarter') {
+            if (req.body.costPrice === undefined) {
+                return res.status(400).json({ error: 'Cost Price is required for Quarter products' });
+            }
+            productData.costPrice = req.body.costPrice;
+        }
+
+        const product = new Product(productData);
 
         await product.save();
         await product.populate('categoryId', 'name subcategories');
@@ -121,14 +131,14 @@ router.post('/', [
 router.put('/:id', [
     auth,
     body('name').trim().notEmpty().withMessage('Name is required'),
-    body('costPrice').isFloat({ min: 0 }).withMessage('Cost Price must be a positive number'),
     body('staffPrice').isFloat({ min: 0 }).withMessage('Staff Price must be a positive number'),
     body('sellPrice').isFloat({ min: 0 }).withMessage('Sell Price must be a positive number'),
     body('stock').isInt({ min: 0 }).withMessage('Stock must be a non-negative integer'),
     body('owner').isIn(['Quarter', 'Sharoofa']).withMessage('Invalid owner'),
     body('categoryId').notEmpty().withMessage('Category is required'),
     body('subcategory').trim().notEmpty().withMessage('Subcategory is required'),
-    body('description').optional().trim()
+    body('description').optional().trim(),
+    body('costPrice').optional().isFloat({ min: 0 }).withMessage('Cost Price must be a positive number')
 ], async (req, res) => {
     try {
         const errors = validationResult(req);
@@ -156,29 +166,36 @@ router.put('/:id', [
             });
         }
 
+        // Create update object with basic properties
+        const updateData = {
+            name: req.body.name,
+            staffPrice: req.body.staffPrice,
+            sellPrice: req.body.sellPrice,
+            stock: req.body.stock,
+            owner: req.body.owner,
+            categoryId: req.body.categoryId,
+            subcategory: req.body.subcategory,
+            description: req.body.description,
+            isAvailable: req.body.isAvailable !== false
+        };
+
+        // Only include costPrice for Quarter products
+        if (req.body.owner === 'Quarter') {
+            if (req.body.costPrice === undefined) {
+                return res.status(400).json({ error: 'Cost Price is required for Quarter products' });
+            }
+            updateData.costPrice = req.body.costPrice;
+        }
 
         const product = await Product.findByIdAndUpdate(
             req.params.id,
-            {
-                name: req.body.name,
-                costPrice: req.body.costPrice,
-                staffPrice: req.body.staffPrice,
-                sellPrice: req.body.sellPrice,
-                stock: req.body.stock,
-                owner: req.body.owner,
-                categoryId: req.body.categoryId,
-                subcategory: req.body.subcategory,
-                description: req.body.description,
-                isAvailable: req.body.isAvailable !== false
-            },
+            updateData,
             { new: true }
-        ).populate('categoryId', 'name subcategories');
-
-        if (!product) {
+        ).populate('categoryId', 'name subcategories'); if (!product) {
             return res.status(404).json({ error: 'Product not found' });
         }
 
-        res.json(product.costPrice, product.staffPrice, product.sellPrice, product.stock, product.owner);
+        res.json(product);
     } catch (error) {
         res.status(500).json({ error: error.message });
     }

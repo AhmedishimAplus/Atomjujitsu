@@ -8,7 +8,6 @@ const productSchema = new mongoose.Schema({
     },
     costPrice: {
         type: Number,
-        required: true,
         min: 0
     },
     staffPrice:{
@@ -26,11 +25,12 @@ const productSchema = new mongoose.Schema({
         required: true,
         min: 0,
         default: 0
-    },    owner: {
+    },
+    owner: {
         type: String,
         required: true,
         enum: ['Quarter', 'Sharoofa'],
-        default: 'Quarter'
+        default: 'Owner 1'
     },
     categoryId: {
         type: mongoose.Schema.Types.ObjectId,

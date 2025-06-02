@@ -112,4 +112,24 @@ router.delete('/:id', auth, async (req, res) => {
     }
 });
 
+// Search staff by name
+router.get('/search', auth, async (req, res) => {
+    try {
+        const { name } = req.query;
+
+        if (!name) {
+            return res.status(400).json({ error: 'Name query parameter is required' });
+        }
+
+        // Case-insensitive search that matches partial names
+        const staff = await Staff.find({
+            name: { $regex: new RegExp(name, 'i') }
+        }).sort({ name: 1 });
+
+        res.json(staff);
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
 module.exports = router;

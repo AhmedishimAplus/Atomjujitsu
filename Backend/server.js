@@ -42,7 +42,8 @@ const purchaseRoutes = require('./routes/purchases');
 const categoryRoutes = require('./routes/categories');
 const expenseRoutes = require('./routes/Expense');
 const userRoutes = require('./routes/User');
-const staffRoutes = require('./routes/staff'); 
+const staffRoutes = require('./routes/staff');
+const salesRoutes = require('./routes/sales');
 
 app.use('/api/auth', authRoutes);
 app.use('/api/users', userRoutes); // Add user route
@@ -51,11 +52,12 @@ app.use('/api/products', productRoutes);
 app.use('/api/purchases', purchaseRoutes);
 app.use('/api/categories', categoryRoutes);
 app.use('/api/staff', staffRoutes); // Add staff route
+app.use('/api/sales', salesRoutes); // Add sales route
 
 
 // Basic health check route
 app.get('/', (req, res) => {
-    res.json({ 
+    res.json({
         status: 'API is running',
         environment: process.env.NODE_ENV,
         timestamp: new Date().toISOString()
