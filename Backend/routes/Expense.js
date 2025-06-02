@@ -66,32 +66,14 @@ router.get('/monthly', auth, async (req, res) => {
 });
 
 // Get weekly expenses (grouped by week)
-router.get('/weekly', auth, async (req, res) => {
-    try {
-        const weeklyExpenses = await Expense.aggregate([
-            {
-                $group: {
-                    _id: {
-                        year: { $year: "$date" },
-                        week: { $isoWeek: "$date" }
-                    },
-                    total: { $sum: "$amount" }
-                }
-            },
-            { $sort: { '_id.year': -1, '_id.week': -1 } }
-        ]);
-        res.json(weeklyExpenses);
-    } catch (error) {
-        res.status(500).json({ error: error.message });
-    }
-});
+
 
 // Get current month's total expenses
 router.get('/current-month-total', auth, async (req, res) => {
     try {
         const now = new Date();
-        const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-        const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999);
+        const startOfMonth = new Date(Date.UTC(now.getFullYear(), now.getMonth(), 1, 0, 0, 0, 0));
+        const endOfMonth = new Date(Date.UTC(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999));
 
         const result = await Expense.aggregate([
             {
@@ -107,12 +89,17 @@ router.get('/current-month-total', auth, async (req, res) => {
             }
         ]);
 
+        // Format dates to a readable format that doesn't show timezone
+        const formatDate = (date) => {
+            return date.toISOString().split('T')[0]; // Returns YYYY-MM-DD format
+        };
+
         const total = result.length > 0 ? result[0].total : 0;
         res.json({
             total,
             period: {
-                start: startOfMonth,
-                end: endOfMonth
+                start: formatDate(startOfMonth),
+                end: formatDate(endOfMonth)
             }
         });
     } catch (error) {
@@ -120,48 +107,35 @@ router.get('/current-month-total', auth, async (req, res) => {
     }
 });
 
-// Get current week's total expenses (weeks end on Friday and reset on 1st of each month)
+// Get current week's total expenses (strict Friday-to-Friday weeks, regardless of month boundaries)
 router.get('/current-week-total', auth, async (req, res) => {
     try {
+        // Create a Date object for "now" in UTC to ensure consistent timezone handling
         const now = new Date();
 
-        // Check if it's a new month (1st of the month) - if so, we'll only count from the 1st
-        const isFirstOfMonth = now.getDate() === 1;
-        let startOfWeek;
+        // Find the beginning of the current week (Friday-based weeks)
+        // A new week starts every Friday and ends the following Thursday
+        const dayOfWeek = now.getDay(); // 0 = Sunday, 5 = Friday, 6 = Saturday
+        let daysToSubtract;
 
-        if (isFirstOfMonth) {
-            // If it's 1st of month, start count from today
-            startOfWeek = new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0, 0);
+        if (dayOfWeek === 5) { // Friday - start of a new week
+            daysToSubtract = 0; // Today is the start of a new week
+        } else if (dayOfWeek === 6) { // Saturday
+            daysToSubtract = 1; // Go back to Friday (yesterday)
+        } else if (dayOfWeek === 0) { // Sunday
+            daysToSubtract = 2; // Go back to Friday (2 days ago)
         } else {
-            // Find the most recent Monday (1 = Monday in getDay() when using ISO weekday)
-            const dayOfWeek = now.getDay() || 7; // Convert Sunday (0) to 7 for ISO weekday
-            const daysFromMonday = dayOfWeek - 1; // Monday is 1 in ISO
+            // Monday (1) through Thursday (4)
+            // Go back to the most recent Friday
+            daysToSubtract = dayOfWeek + 2; // +2 because we're counting back from the previous Friday
+        }        // Create start date in UTC for consistent timezone handling
+        // Using the most recent Friday as the start of the week, regardless of month
+        const startOfWeek = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() - daysToSubtract, 0, 0, 0, 0));
 
-            startOfWeek = new Date(now);
-            startOfWeek.setDate(now.getDate() - daysFromMonday);
-            startOfWeek.setHours(0, 0, 0, 0);
+        // Calculate the end date (next Thursday at 23:59:59.999 UTC)
+        // If today is Thursday, end date is today; otherwise it's the next Thursday
+        const endOfWeek = new Date(Date.UTC(startOfWeek.getUTCFullYear(), startOfWeek.getUTCMonth(), startOfWeek.getUTCDate() + 6, 23, 59, 59, 999));
 
-            // If startOfWeek is in the previous month, and we're not on the 1st,
-            // then we need to set it to the 1st of current month
-            if (startOfWeek.getMonth() !== now.getMonth()) {
-                startOfWeek = new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0, 0);
-            }
-        }
-
-        // End of week is Friday (5 = Friday in getDay()) or the current day if before Friday
-        let endOfWeek;
-        const fridayOfWeek = new Date(startOfWeek);
-        const daysUntilFriday = 5 - startOfWeek.getDay(); // 5 = Friday
-        fridayOfWeek.setDate(startOfWeek.getDate() + (daysUntilFriday >= 0 ? daysUntilFriday : daysUntilFriday + 7));
-        fridayOfWeek.setHours(23, 59, 59, 999);
-
-        // If today is before Friday, use today as the end date
-        if (now < fridayOfWeek) {
-            endOfWeek = new Date(now);
-            endOfWeek.setHours(23, 59, 59, 999);
-        } else {
-            endOfWeek = fridayOfWeek;
-        }
         const result = await Expense.aggregate([
             {
                 $match: {
@@ -177,18 +151,22 @@ router.get('/current-week-total', auth, async (req, res) => {
         ]);
 
         const total = result.length > 0 ? result[0].total : 0;
+
+        // Format dates to a readable format that doesn't show timezone
+        const formatDate = (date) => {
+            return date.toISOString().split('T')[0]; // Returns YYYY-MM-DD format
+        };
+
         res.json({
             total,
             period: {
-                start: startOfWeek,
-                end: endOfWeek
+                start: formatDate(startOfWeek),
+                end: formatDate(endOfWeek)
             }
         });
     } catch (error) {
         res.status(500).json({ error: error.message });
     }
 });
-
-
 
 module.exports = router;
