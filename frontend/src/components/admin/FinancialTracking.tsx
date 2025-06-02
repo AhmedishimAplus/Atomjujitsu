@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useAppContext } from '../../context/AppContext';
 import { Card, CardHeader, CardBody } from '../ui/Card';
 import Button from '../ui/Button';
@@ -8,35 +8,42 @@ import Modal from '../ui/Modal';
 import { Expense } from '../../types';
 import { formatCurrency, formatDate, generateId } from '../../utils/helpers';
 import { Plus, Calendar, DollarSign } from 'lucide-react';
+import { createExpense, getExpenses } from '../../services/api';
 
 const FinancialTracking: React.FC = () => {
   const { state, dispatch } = useAppContext();
   const [expenseModalOpen, setExpenseModalOpen] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [dateRange, setDateRange] = useState<string>('all');
-  
+
   const [expenseData, setExpenseData] = useState<Omit<Expense, 'id'>>({
     description: '',
     amount: 0,
     date: new Date(),
     category: 'Inventory'
   });
-  
-  // Filter expenses by category and date range
-  const filteredExpenses = state.expenses
+
+  const [dbExpenses, setDbExpenses] = useState<Expense[]>([]);
+
+  useEffect(() => {
+    getExpenses().then(setDbExpenses);
+  }, []);
+
+  // Only show expenses from the database
+  const filteredExpenses = dbExpenses
     .filter(expense => selectedCategory === 'all' || expense.category === selectedCategory)
     .filter(expense => {
       if (dateRange === 'all') return true;
       const now = new Date();
       const expenseDate = new Date(expense.date);
-      
+
       if (dateRange === 'thisMonth') {
         return (
           expenseDate.getMonth() === now.getMonth() &&
           expenseDate.getFullYear() === now.getFullYear()
         );
       }
-      
+
       if (dateRange === 'lastMonth') {
         const lastMonth = new Date(now.getFullYear(), now.getMonth() - 1);
         return (
@@ -44,22 +51,22 @@ const FinancialTracking: React.FC = () => {
           expenseDate.getFullYear() === lastMonth.getFullYear()
         );
       }
-      
+
       if (dateRange === 'thisWeek') {
         const weekStart = new Date(now);
         weekStart.setDate(now.getDate() - now.getDay());
         return expenseDate >= weekStart;
       }
-      
+
       return true;
     });
-  
+
   // Calculate total expenses
   const totalExpenses = filteredExpenses.reduce(
     (sum, expense) => sum + expense.amount,
     0
   );
-  
+
   // Available expense categories
   const expenseCategories = [
     'Inventory',
@@ -70,7 +77,7 @@ const FinancialTracking: React.FC = () => {
     'Rent',
     'Miscellaneous'
   ];
-  
+
   // Handle form input changes
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
@@ -79,7 +86,7 @@ const FinancialTracking: React.FC = () => {
       [name]: name === 'description' ? value : parseFloat(value)
     }));
   };
-  
+
   // Handle category selection
   const handleCategoryChange = (value: string) => {
     setExpenseData(prev => ({
@@ -87,7 +94,7 @@ const FinancialTracking: React.FC = () => {
       category: value
     }));
   };
-  
+
   // Handle date change
   const handleDateChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setExpenseData(prev => ({
@@ -95,25 +102,25 @@ const FinancialTracking: React.FC = () => {
       date: new Date(e.target.value)
     }));
   };
-  
+
   // Handle adding new expense
-  const handleAddExpense = () => {
-    dispatch({
-      type: 'ADD_EXPENSE',
-      payload: {
-        ...expenseData,
-        id: generateId()
-      }
-    });
-    setExpenseModalOpen(false);
-    setExpenseData({
-      description: '',
-      amount: 0,
-      date: new Date(),
-      category: 'Inventory'
-    });
+  const handleAddExpense = async () => {
+    try {
+      await createExpense(expenseData);
+      const updated = await getExpenses();
+      setDbExpenses(updated);
+      setExpenseModalOpen(false);
+      setExpenseData({
+        description: '',
+        amount: 0,
+        date: new Date(),
+        category: 'Inventory'
+      });
+    } catch (err) {
+      alert('Failed to add expense.');
+    }
   };
-  
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
@@ -126,7 +133,7 @@ const FinancialTracking: React.FC = () => {
           Add Expense
         </Button>
       </div>
-      
+
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         <Card>
           <CardBody className="p-4">
@@ -141,7 +148,7 @@ const FinancialTracking: React.FC = () => {
             </div>
           </CardBody>
         </Card>
-        
+
         <Card>
           <CardBody className="p-4">
             <div className="flex justify-between items-center">
@@ -149,16 +156,14 @@ const FinancialTracking: React.FC = () => {
                 <p className="text-sm text-gray-500">Expenses This Month</p>
                 <p className="text-2xl font-bold text-gray-900">
                   {formatCurrency(
-                    state.expenses
-                      .filter(expense => {
-                        const now = new Date();
-                        const expenseDate = new Date(expense.date);
-                        return (
-                          expenseDate.getMonth() === now.getMonth() &&
-                          expenseDate.getFullYear() === now.getFullYear()
-                        );
-                      })
-                      .reduce((sum, expense) => sum + expense.amount, 0)
+                    dbExpenses.filter(expense => {
+                      const now = new Date();
+                      const expenseDate = new Date(expense.date);
+                      return (
+                        expenseDate.getMonth() === now.getMonth() &&
+                        expenseDate.getFullYear() === now.getFullYear()
+                      );
+                    }).reduce((sum, expense) => sum + expense.amount, 0)
                   )}
                 </p>
               </div>
@@ -169,7 +174,7 @@ const FinancialTracking: React.FC = () => {
           </CardBody>
         </Card>
       </div>
-      
+
       <Card>
         <CardHeader className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
           <h2 className="text-lg font-semibold text-gray-800">Expense Records</h2>
@@ -196,7 +201,7 @@ const FinancialTracking: React.FC = () => {
             />
           </div>
         </CardHeader>
-        
+
         <CardBody className="p-0">
           <div className="overflow-x-auto">
             <table className="min-w-full divide-y divide-gray-200">
@@ -256,7 +261,7 @@ const FinancialTracking: React.FC = () => {
           </div>
         </CardBody>
       </Card>
-      
+
       {/* Add Expense Modal */}
       <Modal
         isOpen={expenseModalOpen}
@@ -272,7 +277,7 @@ const FinancialTracking: React.FC = () => {
             onChange={handleInputChange}
             fullWidth
           />
-          
+
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <Input
               type="number"
@@ -292,7 +297,7 @@ const FinancialTracking: React.FC = () => {
               fullWidth
             />
           </div>
-          
+
           <Input
             type="date"
             label="Date"
@@ -300,7 +305,7 @@ const FinancialTracking: React.FC = () => {
             onChange={handleDateChange}
             fullWidth
           />
-          
+
           <div className="flex justify-end space-x-3 pt-4">
             <Button
               variant="outline"

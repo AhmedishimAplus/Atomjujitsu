@@ -5,6 +5,7 @@ import Button from '../ui/Button';
 import Select from '../ui/Select';
 import { formatCurrency, getWeekDates, getMonthDates } from '../../utils/helpers';
 import { BarChart3, TrendingUp, Download, ShoppingBag, DollarSign, Package } from 'lucide-react';
+import { getExpenses } from '../../services/api';
 
 const AnalyticsDashboard: React.FC = () => {
   const { state } = useAppContext();
@@ -12,16 +13,22 @@ const AnalyticsDashboard: React.FC = () => {
   const [salesData, setSalesData] = useState<{ label: string; value: number }[]>([]);
   const [expensesData, setExpensesData] = useState<{ label: string; value: number }[]>([]);
   const [topProducts, setTopProducts] = useState<{ name: string; quantity: number; revenue: number }[]>([]);
-  
+  const [dbExpenses, setDbExpenses] = useState<any[]>([]);
+
+  // Fetch only DB expenses
+  useEffect(() => {
+    getExpenses().then(setDbExpenses);
+  }, []);
+
   // Calculate date ranges
   const weekDates = getWeekDates();
   const monthDates = getMonthDates();
-  
+
   // Generate analytics based on report type
   useEffect(() => {
     // Determine date range
     const { start, end } = reportType === 'weekly' ? weekDates : monthDates;
-    
+
     // Filter transactions by date range
     const filteredTransactions = state.transactions.filter(
       transaction => {
@@ -29,39 +36,39 @@ const AnalyticsDashboard: React.FC = () => {
         return date >= start && date <= end;
       }
     );
-    
-    // Filter expenses by date range
-    const filteredExpenses = state.expenses.filter(
+
+    // Filter expenses by date range (from DB only)
+    const filteredExpenses = dbExpenses.filter(
       expense => {
         const date = new Date(expense.date);
-        return date >= start && date <= end;
+        return date >= (reportType === 'weekly' ? weekDates.start : monthDates.start) && date <= (reportType === 'weekly' ? weekDates.end : monthDates.end);
       }
     );
-    
+
     // Calculate sales by day
     const salesByDay: Record<string, number> = {};
-    const daysInRange = (end.getTime() - start.getTime()) / (1000 * 3600 * 24);
-    
+    const daysInRange = ((reportType === 'weekly' ? weekDates.end : monthDates.end).getTime() - (reportType === 'weekly' ? weekDates.start : monthDates.start).getTime()) / (1000 * 3600 * 24);
+
     for (let i = 0; i <= daysInRange; i++) {
-      const date = new Date(start);
-      date.setDate(start.getDate() + i);
+      const date = new Date(reportType === 'weekly' ? weekDates.start : monthDates.start);
+      date.setDate(date.getDate() + i);
       const dateString = date.toISOString().substring(0, 10);
       salesByDay[dateString] = 0;
     }
-    
+
     filteredTransactions.forEach(transaction => {
       const date = new Date(transaction.timestamp).toISOString().substring(0, 10);
       salesByDay[date] = (salesByDay[date] || 0) + transaction.total;
     });
-    
+
     // Calculate expenses by day
     const expensesByDay: Record<string, number> = { ...salesByDay };
-    
+
     filteredExpenses.forEach(expense => {
       const date = new Date(expense.date).toISOString().substring(0, 10);
       expensesByDay[date] = (expensesByDay[date] || 0) + expense.amount;
     });
-    
+
     // Format data for charts
     setSalesData(
       Object.entries(salesByDay).map(([date, value]) => ({
@@ -69,17 +76,17 @@ const AnalyticsDashboard: React.FC = () => {
         value
       }))
     );
-    
+
     setExpensesData(
       Object.entries(expensesByDay).map(([date, value]) => ({
         label: date.substring(5), // MM-DD format
         value
       }))
     );
-    
+
     // Calculate top products
     const productSales: Record<string, { quantity: number; revenue: number }> = {};
-    
+
     filteredTransactions.forEach(transaction => {
       const order = state.completedOrders.find(order => order.id === transaction.orderId);
       if (order) {
@@ -92,7 +99,7 @@ const AnalyticsDashboard: React.FC = () => {
         });
       }
     });
-    
+
     setTopProducts(
       Object.entries(productSales)
         .map(([name, data]) => ({
@@ -103,26 +110,26 @@ const AnalyticsDashboard: React.FC = () => {
         .sort((a, b) => b.revenue - a.revenue)
         .slice(0, 5)
     );
-  }, [reportType, state.transactions, state.expenses, state.completedOrders, weekDates, monthDates]);
-  
+  }, [reportType, state.transactions, state.completedOrders, weekDates, monthDates, dbExpenses]);
+
   // Calculate summary metrics
   const totalSales = salesData.reduce((sum, item) => sum + item.value, 0);
   const totalExpenses = expensesData.reduce((sum, item) => sum + item.value, 0);
   const totalProfit = totalSales - totalExpenses;
   const totalTransactions = reportType === 'weekly'
     ? state.transactions.filter(t => {
-        const date = new Date(t.timestamp);
-        return date >= weekDates.start && date <= weekDates.end;
-      }).length
+      const date = new Date(t.timestamp);
+      return date >= weekDates.start && date <= weekDates.end;
+    }).length
     : state.transactions.filter(t => {
-        const date = new Date(t.timestamp);
-        return date >= monthDates.start && date <= monthDates.end;
-      }).length;
-  
+      const date = new Date(t.timestamp);
+      return date >= monthDates.start && date <= monthDates.end;
+    }).length;
+
   // Handle exporting report
   const handleExportReport = () => {
     const { start, end } = reportType === 'weekly' ? weekDates : monthDates;
-    
+
     // Create report content
     const reportContent = {
       reportType: reportType === 'weekly' ? 'Weekly Report' : 'Monthly Report',
@@ -137,10 +144,10 @@ const AnalyticsDashboard: React.FC = () => {
       expensesByDay: expensesData,
       topProducts
     };
-    
+
     // Convert to JSON string
     const jsonString = JSON.stringify(reportContent, null, 2);
-    
+
     // Create blob and download
     const blob = new Blob([jsonString], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
@@ -149,7 +156,7 @@ const AnalyticsDashboard: React.FC = () => {
     link.download = `${reportType}-report-${new Date().toISOString().substring(0, 10)}.json`;
     link.click();
   };
-  
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
@@ -173,7 +180,7 @@ const AnalyticsDashboard: React.FC = () => {
           </Button>
         </div>
       </div>
-      
+
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         <Card>
           <CardBody className="p-4">
@@ -188,7 +195,7 @@ const AnalyticsDashboard: React.FC = () => {
             </div>
           </CardBody>
         </Card>
-        
+
         <Card>
           <CardBody className="p-4">
             <div className="flex justify-between items-center">
@@ -202,7 +209,7 @@ const AnalyticsDashboard: React.FC = () => {
             </div>
           </CardBody>
         </Card>
-        
+
         <Card>
           <CardBody className="p-4">
             <div className="flex justify-between items-center">
@@ -216,7 +223,7 @@ const AnalyticsDashboard: React.FC = () => {
             </div>
           </CardBody>
         </Card>
-        
+
         <Card>
           <CardBody className="p-4">
             <div className="flex justify-between items-center">
@@ -231,7 +238,7 @@ const AnalyticsDashboard: React.FC = () => {
           </CardBody>
         </Card>
       </div>
-      
+
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <Card>
           <CardHeader>
@@ -246,7 +253,7 @@ const AnalyticsDashboard: React.FC = () => {
                   {salesData.map((item, index) => {
                     const maxValue = Math.max(...salesData.map(d => d.value));
                     const height = maxValue > 0 ? (item.value / maxValue) * 100 : 0;
-                    
+
                     return (
                       <div key={index} className="flex flex-col items-center flex-1">
                         <div
@@ -266,7 +273,7 @@ const AnalyticsDashboard: React.FC = () => {
             </div>
           </CardBody>
         </Card>
-        
+
         <Card>
           <CardHeader>
             <h2 className="text-lg font-semibold text-gray-800">Top Products</h2>
@@ -315,7 +322,7 @@ const AnalyticsDashboard: React.FC = () => {
           </CardBody>
         </Card>
       </div>
-      
+
       <Card>
         <CardHeader className="flex justify-between items-center">
           <h2 className="text-lg font-semibold text-gray-800">Inventory Status</h2>

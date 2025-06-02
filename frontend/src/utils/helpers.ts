@@ -13,20 +13,23 @@ export const formatCurrency = (amount: number): string => {
 /**
  * Format date to readable string
  */
-export const formatDate = (date: Date): string => {
+export const formatDate = (date: Date | string): string => {
+  if (!date) return '';
+  const d = typeof date === 'string' ? new Date(date) : date;
+  if (isNaN(d.getTime())) return '';
   return new Intl.DateTimeFormat('en-US', {
     year: 'numeric',
     month: 'short',
     day: 'numeric',
-  }).format(date);
+  }).format(d);
 };
 
 /**
  * Generate a unique ID
  */
 export const generateId = (): string => {
-  return Math.random().toString(36).substring(2, 15) + 
-         Math.random().toString(36).substring(2, 15);
+  return Math.random().toString(36).substring(2, 15) +
+    Math.random().toString(36).substring(2, 15);
 };
 
 /**
@@ -43,18 +46,18 @@ export const shouldResetAllowance = (): boolean => {
 export const getWeekDates = (): { start: Date; end: Date } => {
   const today = new Date();
   const day = today.getDay(); // 0 is Sunday, 6 is Saturday
-  
+
   // Calculate days until previous Friday (5 is Friday)
   const daysToFriday = day >= 5 ? day - 5 : day + 2;
-  
+
   const startDate = new Date(today);
   startDate.setDate(today.getDate() - daysToFriday);
   startDate.setHours(0, 0, 0, 0);
-  
+
   const endDate = new Date(startDate);
   endDate.setDate(startDate.getDate() + 6);
   endDate.setHours(23, 59, 59, 999);
-  
+
   return { start: startDate, end: endDate };
 };
 
@@ -65,6 +68,6 @@ export const getMonthDates = (): { start: Date; end: Date } => {
   const today = new Date();
   const startDate = new Date(today.getFullYear(), today.getMonth(), 1);
   const endDate = new Date(today.getFullYear(), today.getMonth() + 1, 0, 23, 59, 59, 999);
-  
+
   return { start: startDate, end: endDate };
 };
