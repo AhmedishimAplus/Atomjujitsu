@@ -113,13 +113,11 @@ router.post('/login', async (req, res) => {
             if (!isValid) {
                 return res.status(401).json({ error: 'Invalid 2FA token' });
             }
-        }
-
-        // Generate JWT token
+        }        // Generate JWT token
         const token = jwt.sign(
             { id: user._id, email: user.email },
             process.env.JWT_SECRET,
-            { expiresIn: '24h' }
+            { expiresIn: '4.5h' }
         );
 
         res.json({

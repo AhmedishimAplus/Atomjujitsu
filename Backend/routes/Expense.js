@@ -169,4 +169,101 @@ router.get('/current-week-total', auth, async (req, res) => {
     }
 });
 
+// Get current month's expenses by category (for bar chart)
+router.get('/current-month-by-category', auth, async (req, res) => {
+    try {
+        const now = new Date();
+        const startOfMonth = new Date(Date.UTC(now.getFullYear(), now.getMonth(), 1, 0, 0, 0, 0));
+        const endOfMonth = new Date(Date.UTC(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999));
+
+        const result = await Expense.aggregate([
+            {
+                $match: {
+                    date: { $gte: startOfMonth, $lte: endOfMonth }
+                }
+            },
+            {
+                $group: {
+                    _id: "$category",
+                    total: { $sum: "$amount" }
+                }
+            },
+            {
+                $sort: { "_id": 1 } // Sort by category name
+            }
+        ]);
+
+        // Format the response for the bar chart
+        const categoryTotals = result.map(item => ({
+            category: item._id,
+            total: item.total
+        }));
+
+        // Format dates to a readable format
+        const formatDate = (date) => {
+            return date.toISOString().split('T')[0]; // Returns YYYY-MM-DD format
+        };
+
+        res.json({
+            data: categoryTotals,
+            period: {
+                start: formatDate(startOfMonth),
+                end: formatDate(endOfMonth)
+            }
+        });
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// Get yearly expenses by month (for line chart)
+router.get('/yearly-expenses', auth, async (req, res) => {
+    try {
+        const now = new Date();
+        const startOfYear = new Date(Date.UTC(now.getFullYear(), 0, 1, 0, 0, 0, 0)); // January 1st of current year
+        const endOfYear = new Date(Date.UTC(now.getFullYear(), 11, 31, 23, 59, 59, 999)); // December 31st of current year
+
+        const result = await Expense.aggregate([
+            {
+                $match: {
+                    date: { $gte: startOfYear, $lte: endOfYear }
+                }
+            },
+            {
+                $group: {
+                    _id: { month: { $month: "$date" } },
+                    total: { $sum: "$amount" }
+                }
+            },
+            {
+                $sort: { "_id.month": 1 } // Sort by month (1-12)
+            }
+        ]);
+
+        // Create an array for all months (1-12) with default 0 values
+        const monthlyData = Array.from({ length: 12 }, (_, i) => ({
+            month: i + 1, // 1-based month index (January = 1)
+            monthName: new Date(Date.UTC(now.getFullYear(), i, 1)).toLocaleString('default', { month: 'long' }),
+            total: 0
+        }));
+
+        // Fill in the actual values from the aggregation result
+        result.forEach(item => {
+            const monthIndex = item._id.month - 1; // Convert 1-based to 0-based index
+            if (monthIndex >= 0 && monthIndex < 12) {
+                monthlyData[monthIndex].total = item.total;
+            }
+        });
+
+        res.json({
+            data: monthlyData,
+            period: {
+                year: now.getFullYear()
+            }
+        });
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
 module.exports = router;

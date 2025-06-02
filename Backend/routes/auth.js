@@ -39,7 +39,7 @@ router.post('/register', [
 
         await admin.save();
 
-       
+
 
         res.status(201).json({
             message: 'Admin registered successfully',
@@ -76,12 +76,10 @@ router.post('/login', [
         const isMatch = await admin.comparePassword(password);
         if (!isMatch) {
             return res.status(401).json({ error: 'Invalid credentials' });
-        }
-
-        const token = jwt.sign(
+        } const token = jwt.sign(
             { id: admin._id },
             process.env.JWT_SECRET,
-            { expiresIn: '24h' }
+            { expiresIn: '4.5h' }
         );
 
         res.json({
