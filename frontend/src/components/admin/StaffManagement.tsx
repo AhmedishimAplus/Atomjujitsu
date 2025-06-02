@@ -1,15 +1,23 @@
-import React from 'react';
+import React, { useEffect } from 'react'; // Added useEffect
 import { useAppContext } from '../../context/AppContext';
 import { Card, CardHeader, CardBody } from '../ui/Card';
 import Button from '../ui/Button';
 import { formatDate } from '../../utils/helpers';
-import { User, Droplet } from 'lucide-react';
+import { User, Droplet, Loader2, AlertTriangle } from 'lucide-react'; // Added Loader2 and AlertTriangle
 
 const StaffManagement: React.FC = () => {
-  const { state, dispatch } = useAppContext();
+  const { state, dispatch, fetchStaff } = useAppContext(); // Added fetchStaff
+  const { staffMembers, transactions, isLoadingStaff, fetchStaffError } = state;
+
+  // Fetch staff if not already called by AppProvider or if needed specifically here
+  // useEffect(() => {
+  //   if (staffMembers.length === 0 && !isLoadingStaff && !fetchStaffError) {
+  //     fetchStaff();
+  //   }
+  // }, [staffMembers, isLoadingStaff, fetchStaffError, fetchStaff]);
   
-  // Filter transactions by staff
-  const staffTransactions = state.transactions.filter(
+  // Filter transactions by staff (this uses transactions from context, which are fetched in FinancialTracking or AppProvider)
+  const staffTransactions = transactions.filter(
     transaction => transaction.staffDiscount && transaction.staffName
   );
   
@@ -27,6 +35,28 @@ const StaffManagement: React.FC = () => {
   const handleResetAllowances = () => {
     dispatch({ type: 'RESET_ALLOWANCES' });
   };
+
+  if (isLoadingStaff && staffMembers.length === 0) {
+    return (
+      <div className="flex flex-col items-center justify-center h-64">
+        <Loader2 className="h-12 w-12 animate-spin text-blue-600" />
+        <p className="mt-4 text-lg text-gray-700">Loading staff members...</p>
+      </div>
+    );
+  }
+
+  if (fetchStaffError) {
+    return (
+      <div className="text-center py-10 bg-red-50 p-6 rounded-lg shadow-md">
+        <AlertTriangle className="mx-auto h-12 w-12 text-red-500" />
+        <h3 className="mt-2 text-xl font-semibold text-red-700">Failed to load staff data</h3>
+        <p className="mt-1 text-md text-gray-600">{fetchStaffError}</p>
+        <Button onClick={() => fetchStaff && fetchStaff()} className="mt-4"> {/* Ensure fetchStaff is defined before calling */}
+          Try Again
+        </Button>
+      </div>
+    );
+  }
   
   return (
     <div className="space-y-6">
@@ -41,8 +71,16 @@ const StaffManagement: React.FC = () => {
         </Button>
       </div>
       
+      {staffMembers.length === 0 && !isLoadingStaff && (
+         <div className="text-center py-10 text-gray-500">
+           <User size={48} className="mx-auto mb-4 opacity-50" />
+           <p className="text-xl">No staff members found.</p>
+           <p className="mt-1">Staff data might still be loading or none exists in the system.</p>
+         </div>
+      )}
+
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {state.staffMembers.map(staff => (
+        {staffMembers.map(staff => (
           <Card key={staff.id} className="transition-all duration-200 hover:shadow-lg">
             <CardBody className="p-6">
               <div className="flex items-center space-x-4">
@@ -57,36 +95,36 @@ const StaffManagement: React.FC = () => {
               <div className="mt-4 space-y-2">
                 <div className="flex justify-between items-center text-sm">
                   <span className="text-gray-500">Large Water Bottles:</span>
-                  <span className="font-medium">{staff.waterBottleAllowance.large} / 2</span>
+                  <span className="font-medium">{staff.waterBottleAllowance?.large ?? 'N/A'} / 2</span>
                 </div>
                 <div className="w-full bg-gray-200 rounded-full h-2.5">
                   <div
                     className="bg-blue-600 h-2.5 rounded-full"
-                    style={{ width: `${(staff.waterBottleAllowance.large / 2) * 100}%` }}
+                    style={{ width: `${((staff.waterBottleAllowance?.large ?? 0) / 2) * 100}%` }}
                   ></div>
                 </div>
                 
                 <div className="flex justify-between items-center text-sm mt-2">
                   <span className="text-gray-500">Small Water Bottles:</span>
-                  <span className="font-medium">{staff.waterBottleAllowance.small} / 2</span>
+                  <span className="font-medium">{staff.waterBottleAllowance?.small ?? 'N/A'} / 2</span>
                 </div>
                 <div className="w-full bg-gray-200 rounded-full h-2.5">
                   <div
                     className="bg-teal-600 h-2.5 rounded-full"
-                    style={{ width: `${(staff.waterBottleAllowance.small / 2) * 100}%` }}
+                    style={{ width: `${((staff.waterBottleAllowance?.small ?? 0) / 2) * 100}%` }}
                   ></div>
                 </div>
               </div>
               
               <div className="mt-4 pt-4 border-t border-gray-200">
-                <h4 className="text-sm font-medium text-gray-700 mb-2">Recent Purchases</h4>
+                <h4 className="text-sm font-medium text-gray-700 mb-2">Recent Purchases (Staff Discount)</h4>
                 {transactionsByStaff[staff.name]?.slice(0, 3).map((transaction, index) => (
                   <div key={index} className="text-sm text-gray-600 mb-1">
-                    {formatDate(transaction.timestamp)} - ${transaction.total.toFixed(2)}
+                    {formatDate(transaction.timestamp)} - {formatCurrency(transaction.total)}
                   </div>
                 ))}
                 {!transactionsByStaff[staff.name] || transactionsByStaff[staff.name].length === 0 ? (
-                  <div className="text-sm text-gray-500 italic">No recent purchases</div>
+                  <div className="text-sm text-gray-500 italic">No recent discounted purchases</div>
                 ) : null}
               </div>
             </CardBody>
@@ -96,7 +134,7 @@ const StaffManagement: React.FC = () => {
       
       <Card>
         <CardHeader>
-          <h2 className="text-lg font-semibold text-gray-800">Staff Purchase History</h2>
+          <h2 className="text-lg font-semibold text-gray-800">All Staff Discount Purchase History</h2>
         </CardHeader>
         <CardBody className="p-0">
           <div className="overflow-x-auto">
@@ -109,6 +147,9 @@ const StaffManagement: React.FC = () => {
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                     Staff Name
                   </th>
+                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Order ID
+                  </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                     Payment Method
                   </th>
@@ -120,8 +161,8 @@ const StaffManagement: React.FC = () => {
               <tbody className="bg-white divide-y divide-gray-200">
                 {staffTransactions.length === 0 ? (
                   <tr>
-                    <td colSpan={4} className="px-6 py-4 text-center text-gray-500">
-                      No staff transactions found
+                    <td colSpan={5} className="px-6 py-4 text-center text-gray-500">
+                      No staff discount transactions found
                     </td>
                   </tr>
                 ) : (
@@ -139,11 +180,14 @@ const StaffManagement: React.FC = () => {
                           <div className="text-sm font-medium text-gray-900">{transaction.staffName}</div>
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap">
+                          <div className="text-sm text-gray-500">{transaction.orderId}</div>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
                           <div className="text-sm text-gray-500">{transaction.paymentMethod}</div>
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-right">
                           <div className="text-sm font-medium text-gray-900">
-                            ${transaction.total.toFixed(2)}
+                            {formatCurrency(transaction.total)}
                           </div>
                         </td>
                       </tr>
