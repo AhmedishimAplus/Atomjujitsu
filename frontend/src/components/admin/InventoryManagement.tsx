@@ -109,18 +109,30 @@ const InventoryManagement: React.FC = () => {
       categoryId: value
     }));
   };
-
   // Handle saving product (create or update via backend)
   const handleSaveProduct = async () => {
     try {
       // Validate required fields
-      if (!formData.name || !formData.categoryId || !formData.subcategory) {
+      const subcategories = categories
+        .find(cat => cat._id === formData.categoryId)
+        ?.subcategories || [];
+
+      const selectedSubcategory = subcategories
+        .find((sub: any) => sub.name === formData.subcategory);
+
+      if (!formData.name || !formData.categoryId || !selectedSubcategory) {
         console.log('Form validation failed:', {
           name: formData.name,
           categoryId: formData.categoryId,
           subcategory: formData.subcategory
         });
-        alert('Please fill in all required fields (Name, Category, and Subcategory)');
+
+        let errorMessage = 'Please fill in all required fields:\n';
+        if (!formData.name) errorMessage += '- Product Name\n';
+        if (!formData.categoryId) errorMessage += '- Category\n';
+        if (!selectedSubcategory) errorMessage += '- Subcategory\n';
+
+        alert(errorMessage);
         return;
       }
 
@@ -293,6 +305,7 @@ const InventoryManagement: React.FC = () => {
         </CardBody>
       </Card>
 
+      {/* Products Card */}
       <Card>
         <CardHeader className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
           <h2 className="text-lg font-semibold text-gray-800">Products</h2>
@@ -317,6 +330,9 @@ const InventoryManagement: React.FC = () => {
                     Category
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Subcategory
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                     Staff Price
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
@@ -333,53 +349,52 @@ const InventoryManagement: React.FC = () => {
                   </th>
                 </tr>
               </thead>
-              <tbody className="bg-white divide-y divide-gray-200">                {filteredProducts.map((product) => (
-                <tr key={product._id} className="hover:bg-gray-50">
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="font-medium text-gray-900">{product.name}</div>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    {categories.find(cat => cat._id === product.categoryId) && (
-                      <div className="flex flex-col">
-                        <span className="text-sm text-gray-700">
-                          {categories.find(cat => cat._id === product.categoryId)?.name}
-                        </span>
-                        <span className="text-xs text-gray-500">{product.subcategory}</span>
+              <tbody className="bg-white divide-y divide-gray-200">
+                {filteredProducts.map((product) => (
+                  <tr key={product._id} className="hover:bg-gray-50">
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <div className="font-medium text-gray-900">{product.name}</div>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <div className="text-sm text-gray-900">
+                        {product.categoryId?.name || 'N/A'}
                       </div>
-                    )}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="text-sm text-gray-900">{product.staffPrice}</div>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="text-sm text-gray-900">{product.sellPrice}</div>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="text-sm text-gray-900">{product.costPrice || 'N/A'}</div>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="text-sm text-gray-900">{product.stock}</div>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => handleOpenProductModal(product)}
-                      className="text-blue-600 hover:text-blue-800 mr-2"
-                    >
-                      <Edit size={16} />
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => handleOpenDeleteModal(product)}
-                      className="text-red-600 hover:text-red-800"
-                    >
-                      <Trash2 size={16} />
-                    </Button>
-                  </td>
-                </tr>
-              ))}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <div className="text-sm text-gray-900">{product.subcategory || 'N/A'}</div>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <div className="text-sm text-gray-900">{product.staffPrice}</div>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <div className="text-sm text-gray-900">{product.sellPrice}</div>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <div className="text-sm text-gray-900">{product.costPrice || 'N/A'}</div>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <div className="text-sm text-gray-900">{product.stock}</div>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => handleOpenProductModal(product)}
+                        className="text-blue-600 hover:text-blue-800 mr-2"
+                      >
+                        <Edit size={16} />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => handleOpenDeleteModal(product)}
+                        className="text-red-600 hover:text-red-800"
+                      >
+                        <Trash2 size={16} />
+                      </Button>
+                    </td>
+                  </tr>
+                ))}
               </tbody>
             </table>
           </div>
@@ -469,22 +484,37 @@ const InventoryManagement: React.FC = () => {
             value={formData.owner}
             onChange={val => setFormData((prev: any) => ({ ...prev, owner: val }))}
             fullWidth
-          />
-          <Select
+          />          <Select
             label="Category"
-            options={categories.map(cat => ({ value: cat._id, label: cat.name }))}
+            options={[
+              { value: '', label: 'Select a category' },
+              ...categories.map(cat => ({ value: cat._id, label: cat.name }))
+            ]}
             value={formData.categoryId}
-            onChange={val => setFormData((prev: any) => ({ ...prev, categoryId: val }))}
+            onChange={val => {
+              setFormData((prev: any) => ({
+                ...prev,
+                categoryId: val,
+                subcategory: '' // Reset subcategory when category changes
+              }));
+            }}
             fullWidth
-          />
-          <Select
-            label="Subcategory"
+          />          <Select label="Subcategory"
             options={
-              (categories.find(cat => cat._id === formData.categoryId)?.subcategories || []).map((sub: any) => ({ value: sub.name, label: sub.name }))
+              !formData.categoryId
+                ? [{ value: '', label: 'Select a category first' }]
+                : [
+                  { value: '', label: 'Select a subcategory' },
+                  ...(categories.find(cat => cat._id === formData.categoryId)?.subcategories || [])
+                    .filter((sub: any) => sub.name && sub.name.trim())
+                    .map((sub: any) => ({ value: sub.name, label: sub.name }))
+                ]
             }
             value={formData.subcategory}
             onChange={val => setFormData((prev: any) => ({ ...prev, subcategory: val }))}
             fullWidth
+            disabled={!formData.categoryId}
+            error={formData.categoryId && !formData.subcategory ? 'Please select a subcategory' : undefined}
           />
 
           <Input
