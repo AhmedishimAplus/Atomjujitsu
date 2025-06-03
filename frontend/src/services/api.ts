@@ -63,6 +63,16 @@ export const createCategory = async (categoryData: any) => {
   return response.data;
 };
 
+export const deleteCategory = async (id: string) => {
+  const response = await api.delete(`/categories/${id}`);
+  return response.data;
+};
+
+export const deleteSubcategory = async (categoryId: string, subcategoryName: string) => {
+  const response = await api.delete(`/categories/${categoryId}/subcategories/${encodeURIComponent(subcategoryName)}`);
+  return response.data;
+};
+
 // Sales
 export const createSale = async (saleData: any) => {
   const response = await api.post('/sales', saleData);

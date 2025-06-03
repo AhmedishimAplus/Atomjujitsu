@@ -8,9 +8,16 @@ import Modal from '../ui/Modal';
 import { ProductItem } from '../../types';
 import { generateId } from '../../utils/helpers';
 import { Plus, Edit, Trash2 } from 'lucide-react';
-import { getProducts, createProduct, updateProduct, deleteProduct, createCategory, getCategories } from '../../services/api';
-
-const API_URL = `${window.location.origin}/api`;
+import {
+  getProducts,
+  createProduct,
+  updateProduct,
+  deleteProduct,
+  createCategory,
+  getCategories,
+  deleteCategory,
+  deleteSubcategory
+} from '../../services/api';
 
 const InventoryManagement: React.FC = () => {
   const { state, dispatch } = useAppContext();
@@ -172,14 +179,18 @@ const InventoryManagement: React.FC = () => {
     setEditingProduct(product);
     setDeleteModalOpen(true);
   };
-
   // Handle deleting product
   const handleDeleteProduct = async () => {
-    if (editingProduct) {
+    if (!editingProduct) return;
+
+    try {
       await deleteProduct(editingProduct.id);
-      fetchProductsAndCategories();
+      await fetchProductsAndCategories();
+      setDeleteModalOpen(false);
+    } catch (error: any) {
+      console.error('Error deleting product:', error);
+      alert(error.response?.data?.error || 'Error deleting product');
     }
-    setDeleteModalOpen(false);
   };
 
   // Category modal handlers
@@ -216,28 +227,24 @@ const InventoryManagement: React.FC = () => {
     fetchProductsAndCategories();
     setCategoryModalOpen(false);
   };
-
   // Category update/delete handlers
   const handleDeleteCategory = async (catId: string) => {
     try {
-      await fetch(`${API_URL}/categories/${catId}`, {
-        method: 'DELETE',
-        headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
-      });
-      fetchProductsAndCategories();
-    } catch (error) {
+      await deleteCategory(catId);
+      await fetchProductsAndCategories();
+    } catch (error: any) {
       console.error('Error deleting category:', error);
+      alert(error.response?.data?.error || 'Error deleting category');
     }
   };
+
   const handleDeleteSubcategory = async (catId: string, subcatName: string) => {
     try {
-      await fetch(`${API_URL}/categories/${catId}/subcategories/${encodeURIComponent(subcatName)}`, {
-        method: 'DELETE',
-        headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
-      });
-      fetchProductsAndCategories();
-    } catch (error) {
+      await deleteSubcategory(catId, subcatName);
+      await fetchProductsAndCategories();
+    } catch (error: any) {
       console.error('Error deleting subcategory:', error);
+      alert(error.response?.data?.error || 'Error deleting subcategory');
     }
   };
 
