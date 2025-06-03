@@ -5,126 +5,187 @@ import Button from '../ui/Button';
 import Select from '../ui/Select';
 import { formatCurrency, getWeekDates, getMonthDates } from '../../utils/helpers';
 import { BarChart3, TrendingUp, Download, ShoppingBag, DollarSign, Package } from 'lucide-react';
-import { getExpenses } from '../../services/api';
+
+interface Product {
+  _id: string;
+  name: string;
+  stock: number;
+  minStock: number;
+}
 
 const AnalyticsDashboard: React.FC = () => {
-  const { state } = useAppContext();
+  const { } = useAppContext(); // Context available for future use if needed
   const [reportType, setReportType] = useState<string>('weekly');
   const [salesData, setSalesData] = useState<{ label: string; value: number }[]>([]);
   const [expensesData, setExpensesData] = useState<{ label: string; value: number }[]>([]);
   const [topProducts, setTopProducts] = useState<{ name: string; quantity: number; revenue: number }[]>([]);
-  const [dbExpenses, setDbExpenses] = useState<any[]>([]);
-
-  // Fetch only DB expenses
-  useEffect(() => {
-    getExpenses().then(setDbExpenses);
-  }, []);
+  const [totalSalesAmount, setTotalSalesAmount] = useState<number>(0);
+  const [totalExpensesAmount, setTotalExpensesAmount] = useState<number>(0);
+  const [totalTransactionsCount, setTotalTransactionsCount] = useState<number>(0);
+  const [lowStockProducts, setLowStockProducts] = useState<Product[]>([]);
 
   // Calculate date ranges
   const weekDates = getWeekDates();
   const monthDates = getMonthDates();
 
+  // Fetch backend data
+  useEffect(() => {
+    // Get authentication token
+    const token = localStorage.getItem('token');
+
+    // Function to fetch data
+    const fetchData = async () => {
+      try {
+        // Fetch sales data based on report type
+        const endpoint = reportType === 'weekly' ? '/api/sales/totals/week' : '/api/sales/totals/month';
+        const salesRes = await fetch(endpoint, {
+          headers: { 'Authorization': token ? `Bearer ${token}` : '' }
+        });
+
+        if (!salesRes.ok) {
+          throw new Error('Failed to fetch sales data');
+        }
+
+        const salesData = await salesRes.json();
+        setTotalSalesAmount(salesData.totalSales || 0);
+        setTotalTransactionsCount(salesData.totalCount || 0);
+
+        // Fetch expenses total
+        const expenseEndpoint = reportType === 'weekly' ? '/api/expenses/current-week-total' : '/api/expenses/current-month-total';
+        const expensesRes = await fetch(expenseEndpoint, {
+          headers: { 'Authorization': token ? `Bearer ${token}` : '' }
+        });
+
+        if (!expensesRes.ok) {
+          throw new Error('Failed to fetch expense data');
+        }
+
+        const expenseData = await expensesRes.json();
+        setTotalExpensesAmount(expenseData.total || 0);
+
+        // Fetch low stock products
+        const productsRes = await fetch('/api/products/low-stock', {
+          headers: { 'Authorization': token ? `Bearer ${token}` : '' }
+        });
+
+        if (productsRes.ok) {
+          const productsData = await productsRes.json();
+          setLowStockProducts(productsData);
+        }
+      } catch (error) {
+        console.error('Error fetching data:', error);
+      }
+    };
+
+    fetchData();
+  }, [reportType]);
+
   // Generate analytics based on report type
   useEffect(() => {
-    // Determine date range
-    const { start, end } = reportType === 'weekly' ? weekDates : monthDates;
+    const token = localStorage.getItem('token');
 
-    // Filter transactions by date range
-    const filteredTransactions = state.transactions.filter(
-      transaction => {
-        const date = new Date(transaction.timestamp);
-        return date >= start && date <= end;
-      }
-    );
+    // Function to fetch chart data
+    const fetchChartData = async () => {
+      try {
+        // Get the date range for the charts
+        const daysInRange = ((reportType === 'weekly' ? weekDates.end : monthDates.end).getTime() -
+          (reportType === 'weekly' ? weekDates.start : monthDates.start).getTime()) / (1000 * 3600 * 24);
 
-    // Filter expenses by date range (from DB only)
-    const filteredExpenses = dbExpenses.filter(
-      expense => {
-        const date = new Date(expense.date);
-        return date >= (reportType === 'weekly' ? weekDates.start : monthDates.start) && date <= (reportType === 'weekly' ? weekDates.end : monthDates.end);
-      }
-    );
+        // Initialize empty chart data
+        const salesByDay: Record<string, number> = {};
+        const expensesByDay: Record<string, number> = {};
 
-    // Calculate sales by day
-    const salesByDay: Record<string, number> = {};
-    const daysInRange = ((reportType === 'weekly' ? weekDates.end : monthDates.end).getTime() - (reportType === 'weekly' ? weekDates.start : monthDates.start).getTime()) / (1000 * 3600 * 24);
+        // Create empty data points for each day in the range
+        for (let i = 0; i <= daysInRange; i++) {
+          const date = new Date(reportType === 'weekly' ? weekDates.start : monthDates.start);
+          date.setDate(date.getDate() + i);
+          const dateString = date.toISOString().substring(0, 10);
+          salesByDay[dateString] = 0;
+          expensesByDay[dateString] = 0;
+        }
 
-    for (let i = 0; i <= daysInRange; i++) {
-      const date = new Date(reportType === 'weekly' ? weekDates.start : monthDates.start);
-      date.setDate(date.getDate() + i);
-      const dateString = date.toISOString().substring(0, 10);
-      salesByDay[dateString] = 0;
-    }
-
-    filteredTransactions.forEach(transaction => {
-      const date = new Date(transaction.timestamp).toISOString().substring(0, 10);
-      salesByDay[date] = (salesByDay[date] || 0) + transaction.total;
-    });
-
-    // Calculate expenses by day
-    const expensesByDay: Record<string, number> = { ...salesByDay };
-
-    filteredExpenses.forEach(expense => {
-      const date = new Date(expense.date).toISOString().substring(0, 10);
-      expensesByDay[date] = (expensesByDay[date] || 0) + expense.amount;
-    });
-
-    // Format data for charts
-    setSalesData(
-      Object.entries(salesByDay).map(([date, value]) => ({
-        label: date.substring(5), // MM-DD format
-        value
-      }))
-    );
-
-    setExpensesData(
-      Object.entries(expensesByDay).map(([date, value]) => ({
-        label: date.substring(5), // MM-DD format
-        value
-      }))
-    );
-
-    // Calculate top products
-    const productSales: Record<string, { quantity: number; revenue: number }> = {};
-
-    filteredTransactions.forEach(transaction => {
-      const order = state.completedOrders.find(order => order.id === transaction.orderId);
-      if (order) {
-        order.items.forEach(item => {
-          if (!productSales[item.name]) {
-            productSales[item.name] = { quantity: 0, revenue: 0 };
-          }
-          productSales[item.name].quantity += item.quantity;
-          productSales[item.name].revenue += item.price * item.quantity;
+        // Fetch daily sales data
+        const dailySalesEndpoint = reportType === 'weekly' ? '/api/sales/daily/week' : '/api/sales/daily/month';
+        const dailySalesRes = await fetch(dailySalesEndpoint, {
+          headers: { 'Authorization': token ? `Bearer ${token}` : '' }
         });
-      }
-    });
 
-    setTopProducts(
-      Object.entries(productSales)
-        .map(([name, data]) => ({
-          name,
-          quantity: data.quantity,
-          revenue: data.revenue
-        }))
-        .sort((a, b) => b.revenue - a.revenue)
-        .slice(0, 5)
-    );
-  }, [reportType, state.transactions, state.completedOrders, weekDates, monthDates, dbExpenses]);
+        if (dailySalesRes.ok) {
+          const dailySalesData = await dailySalesRes.json();
+
+          // Update sales chart data
+          dailySalesData.forEach((item: any) => {
+            const date = new Date(item.date).toISOString().substring(0, 10);
+            // Exclude Sharoofa products by using the non-Sharoofa total
+            salesByDay[date] = item.nonSharoofaTotal || 0;
+          });
+        }
+
+        // Fetch daily expenses data
+        const dailyExpensesEndpoint = reportType === 'weekly' ? '/api/expenses/daily/week' : '/api/expenses/daily/month';
+        const dailyExpensesRes = await fetch(dailyExpensesEndpoint, {
+          headers: { 'Authorization': token ? `Bearer ${token}` : '' }
+        });
+
+        if (dailyExpensesRes.ok) {
+          const dailyExpensesData = await dailyExpensesRes.json();
+
+          // Update expenses chart data
+          dailyExpensesData.forEach((item: any) => {
+            const date = new Date(item.date).toISOString().substring(0, 10);
+            expensesByDay[date] = item.total || 0;
+          });
+        }
+
+        // Format data for charts
+        setSalesData(
+          Object.entries(salesByDay).map(([date, value]) => ({
+            label: date.substring(5), // MM-DD format
+            value
+          }))
+        );
+
+        setExpensesData(
+          Object.entries(expensesByDay).map(([date, value]) => ({
+            label: date.substring(5), // MM-DD format
+            value
+          }))
+        );
+
+        // Fetch top products
+        const topProductsEndpoint = reportType === 'weekly' ?
+          '/api/sales/top-products/week' : '/api/sales/top-products/month';
+
+        const topProductsRes = await fetch(topProductsEndpoint, {
+          headers: { 'Authorization': token ? `Bearer ${token}` : '' }
+        });
+
+        if (topProductsRes.ok) {
+          const topProductsData = await topProductsRes.json();
+
+          // Filter out Sharoofa products
+          const filteredProducts = topProductsData.filter((product: any) =>
+            product.owner !== 'Sharoofa'
+          );
+
+          setTopProducts(
+            filteredProducts.map((product: any) => ({
+              name: product.name,
+              quantity: product.quantity,
+              revenue: product.revenue
+            })).slice(0, 5)
+          );
+        }
+      } catch (error) {
+        console.error('Error fetching chart data:', error);
+      }
+    };
+
+    fetchChartData();
+  }, [reportType, weekDates, monthDates]);
 
   // Calculate summary metrics
-  const totalSales = salesData.reduce((sum, item) => sum + item.value, 0);
-  const totalExpenses = expensesData.reduce((sum, item) => sum + item.value, 0);
-  const totalProfit = totalSales - totalExpenses;
-  const totalTransactions = reportType === 'weekly'
-    ? state.transactions.filter(t => {
-      const date = new Date(t.timestamp);
-      return date >= weekDates.start && date <= weekDates.end;
-    }).length
-    : state.transactions.filter(t => {
-      const date = new Date(t.timestamp);
-      return date >= monthDates.start && date <= monthDates.end;
-    }).length;
+  const totalProfit = totalSalesAmount - totalExpensesAmount;
 
   // Handle exporting report
   const handleExportReport = () => {
@@ -135,10 +196,10 @@ const AnalyticsDashboard: React.FC = () => {
       reportType: reportType === 'weekly' ? 'Weekly Report' : 'Monthly Report',
       dateRange: `${start.toLocaleDateString()} to ${end.toLocaleDateString()}`,
       summary: {
-        totalSales,
-        totalExpenses,
+        totalSales: totalSalesAmount,
+        totalExpenses: totalExpensesAmount,
         totalProfit,
-        totalTransactions
+        totalTransactions: totalTransactionsCount
       },
       salesByDay: salesData,
       expensesByDay: expensesData,
@@ -187,7 +248,7 @@ const AnalyticsDashboard: React.FC = () => {
             <div className="flex justify-between items-center">
               <div>
                 <p className="text-sm text-gray-500">Total Sales</p>
-                <p className="text-2xl font-bold text-gray-900">{formatCurrency(totalSales)}</p>
+                <p className="text-2xl font-bold text-gray-900">{formatCurrency(totalSalesAmount)}</p>
               </div>
               <div className="bg-green-100 p-3 rounded-full text-green-600">
                 <DollarSign size={24} />
@@ -201,7 +262,7 @@ const AnalyticsDashboard: React.FC = () => {
             <div className="flex justify-between items-center">
               <div>
                 <p className="text-sm text-gray-500">Total Expenses</p>
-                <p className="text-2xl font-bold text-gray-900">{formatCurrency(totalExpenses)}</p>
+                <p className="text-2xl font-bold text-gray-900">{formatCurrency(totalExpensesAmount)}</p>
               </div>
               <div className="bg-red-100 p-3 rounded-full text-red-600">
                 <DollarSign size={24} />
@@ -229,7 +290,7 @@ const AnalyticsDashboard: React.FC = () => {
             <div className="flex justify-between items-center">
               <div>
                 <p className="text-sm text-gray-500">Transactions</p>
-                <p className="text-2xl font-bold text-gray-900">{totalTransactions}</p>
+                <p className="text-2xl font-bold text-gray-900">{totalTransactionsCount}</p>
               </div>
               <div className="bg-amber-100 p-3 rounded-full text-amber-600">
                 <ShoppingBag size={24} />
@@ -347,35 +408,32 @@ const AnalyticsDashboard: React.FC = () => {
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
-                {state.inventory
-                  .filter(product => product.quantity <= product.reorderThreshold * 1.2)
-                  .sort((a, b) => (a.quantity / a.reorderThreshold) - (b.quantity / b.reorderThreshold))
-                  .map((product) => (
-                    <tr key={product.id} className="hover:bg-gray-50">
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="flex items-center">
-                          <div className="text-sm font-medium text-gray-900">{product.name}</div>
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-center">
-                        <div className="text-sm text-gray-900">{product.quantity}</div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-center">
-                        <div className="text-sm text-gray-900">{product.reorderThreshold}</div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-center">
-                        {product.quantity <= product.reorderThreshold ? (
-                          <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-red-100 text-red-800">
-                            Reorder Now
-                          </span>
-                        ) : (
-                          <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-yellow-100 text-yellow-800">
-                            Low Stock
-                          </span>
-                        )}
-                      </td>
-                    </tr>
-                  ))}
+                {lowStockProducts.map((product) => (
+                  <tr key={product._id} className="hover:bg-gray-50">
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <div className="flex items-center">
+                        <div className="text-sm font-medium text-gray-900">{product.name}</div>
+                      </div>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-center">
+                      <div className="text-sm text-gray-900">{product.stock}</div>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-center">
+                      <div className="text-sm text-gray-900">{product.minStock}</div>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-center">
+                      {product.stock <= product.minStock ? (
+                        <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-red-100 text-red-800">
+                          Reorder Now
+                        </span>
+                      ) : (
+                        <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-yellow-100 text-yellow-800">
+                          Low Stock
+                        </span>
+                      )}
+                    </td>
+                  </tr>
+                ))}
               </tbody>
             </table>
           </div>
