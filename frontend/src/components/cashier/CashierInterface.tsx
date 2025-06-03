@@ -164,6 +164,9 @@ const CashierInterface: React.FC = () => {
     }
     try {
       await createSale(payload);
+      // Refresh products after sale to update stock
+      const productsData = await getProducts();
+      setProducts(productsData.filter((p: ProductItem) => p.isAvailable));
       dispatch({
         type: 'COMPLETE_ORDER',
         payload: {
@@ -240,6 +243,9 @@ const CashierInterface: React.FC = () => {
                               </div>
                               {product.stock <= 0 && (
                                 <p className="text-red-500 text-sm mt-1">Out of stock</p>
+                              )}
+                              {product.stock > 0 && (
+                                <p className="text-xs text-gray-500 mt-1">Stock: {product.stock}</p>
                               )}
                             </div>
                           </div>
