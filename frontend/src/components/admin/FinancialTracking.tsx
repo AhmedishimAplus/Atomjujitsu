@@ -38,6 +38,12 @@ const FinancialTracking: React.FC = () => {
   const [weekAnalyticsError, setWeekAnalyticsError] = useState<string | null>(null);
   const [weekAnalyticsLoading, setWeekAnalyticsLoading] = useState<boolean>(true);
 
+  // Fetch backend analytics for month and week
+  const [backendMonthTotals, setBackendMonthTotals] = useState<{ totalSales: number, totalProfit: number } | null>(null);
+  const [backendWeekTotals, setBackendWeekTotals] = useState<{ totalSales: number, totalProfit: number } | null>(null);
+  const [backendTotalsLoading, setBackendTotalsLoading] = useState(true);
+  const [backendTotalsError, setBackendTotalsError] = useState<string | null>(null);
+
   useEffect(() => {
     getExpenses().then(setDbExpenses);
     getCategories().then(setCategories);
@@ -86,6 +92,28 @@ const FinancialTracking: React.FC = () => {
       setWeekAnalyticsLoading(false);
     }
   };
+
+  useEffect(() => {
+    async function fetchBackendTotals() {
+      setBackendTotalsLoading(true);
+      setBackendTotalsError(null);
+      try {
+        const token = localStorage.getItem('token') || '';
+        const monthRes = await fetch('/api/sales/totals/month', { headers: { 'Authorization': token ? `Bearer ${token}` : '' } });
+        const weekRes = await fetch('/api/sales/totals/week', { headers: { 'Authorization': token ? `Bearer ${token}` : '' } });
+        if (!monthRes.ok || !weekRes.ok) throw new Error('Failed to fetch totals');
+        const monthData = await monthRes.json();
+        const weekData = await weekRes.json();
+        setBackendMonthTotals(monthData);
+        setBackendWeekTotals(weekData);
+      } catch (e) {
+        setBackendTotalsError('Failed to load backend totals');
+      } finally {
+        setBackendTotalsLoading(false);
+      }
+    }
+    fetchBackendTotals();
+  }, []);
 
   useEffect(() => {
     if (view === 'sales') {
@@ -466,6 +494,47 @@ const FinancialTracking: React.FC = () => {
               </Card>
             </div>
           )}
+          {/* Backend Month/Week Totals Cards */}
+          {backendTotalsLoading ? (
+            <div className="text-center py-8 text-gray-500">Loading backend totals...</div>
+          ) : backendTotalsError ? (
+            <div className="text-center py-8 text-red-500">{backendTotalsError}</div>
+          ) : backendMonthTotals && backendWeekTotals ? (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
+              <Card>
+                <CardBody className="p-4">
+                  <div>
+                    <p className="text-sm text-gray-500">Total Sales This Month</p>
+                    <p className="text-2xl font-bold text-blue-700">{formatCurrency(backendMonthTotals.totalSales)}</p>
+                  </div>
+                </CardBody>
+              </Card>
+              <Card>
+                <CardBody className="p-4">
+                  <div>
+                    <p className="text-sm text-gray-500">Total Profit This Month</p>
+                    <p className="text-2xl font-bold text-green-700">{formatCurrency(backendMonthTotals.totalProfit)}</p>
+                  </div>
+                </CardBody>
+              </Card>
+              <Card>
+                <CardBody className="p-4">
+                  <div>
+                    <p className="text-sm text-gray-500">Total Sales This Week</p>
+                    <p className="text-2xl font-bold text-blue-700">{formatCurrency(backendWeekTotals.totalSales)}</p>
+                  </div>
+                </CardBody>
+              </Card>
+              <Card>
+                <CardBody className="p-4">
+                  <div>
+                    <p className="text-sm text-gray-500">Total Profit This Week</p>
+                    <p className="text-2xl font-bold text-green-700">{formatCurrency(backendWeekTotals.totalProfit)}</p>
+                  </div>
+                </CardBody>
+              </Card>
+            </div>
+          ) : null}
           <Card>
             <CardHeader className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
               <h2 className="text-lg font-semibold text-gray-800">Sales Records</h2>
