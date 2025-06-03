@@ -183,4 +183,81 @@ router.delete('/:id/subcategories/:subcategoryName', auth, async (req, res) => {
     }
 });
 
+// Get category statistics with product details
+router.get('/statistics', auth, async (req, res) => {
+    try {
+        const categories = await Category.find().sort({ name: 1 });
+        const Product = require('../models/Product'); // Import Product model
+
+        const categoryStats = [];
+        
+        for (const category of categories) {
+            const subcategoryStats = [];
+            
+            // Process each subcategory
+            for (const subcategory of category.subcategories) {
+                // Find all products in this subcategory
+                const products = await Product.find({
+                    categoryId: category._id,
+                    subcategory: subcategory.name,
+                    isAvailable: true
+                });
+
+                // Calculate subcategory statistics
+                const totalStock = products.reduce((sum, product) => sum + product.stock, 0);
+                const avgSellPrice = products.length > 0 
+                    ? products.reduce((sum, product) => sum + product.sellPrice, 0) / products.length 
+                    : 0;
+                const avgStaffPrice = products.length > 0
+                    ? products.reduce((sum, product) => sum + product.staffPrice, 0) / products.length
+                    : 0;
+
+                subcategoryStats.push({
+                    name: subcategory.name,
+                    productCount: products.length,
+                    totalStock,
+                    averagePrices: {
+                        sell: Number(avgSellPrice.toFixed(2)),
+                        staff: Number(avgStaffPrice.toFixed(2))
+                    },
+                    products: products.map(product => ({
+                        name: product.name,
+                        category: category.name,
+                        description: product.description,
+                        stock: product.stock,
+                        sellPrice: product.sellPrice,
+                        staffPrice: product.staffPrice
+                    }))
+                });
+            }
+
+            // Calculate category totals
+            const allProducts = await Product.find({
+                categoryId: category._id,
+                isAvailable: true
+            });
+
+            categoryStats.push({
+                categoryId: category._id,
+                name: category.name,
+                totalProducts: allProducts.length,
+                totalStock: allProducts.reduce((sum, product) => sum + product.stock, 0),
+                averagePrices: {
+                    sell: allProducts.length > 0
+                        ? Number((allProducts.reduce((sum, product) => sum + product.sellPrice, 0) / allProducts.length).toFixed(2))
+                        : 0,
+                    staff: allProducts.length > 0
+                        ? Number((allProducts.reduce((sum, product) => sum + product.staffPrice, 0) / allProducts.length).toFixed(2))
+                        : 0
+                },
+                subcategories: subcategoryStats
+            });
+        }
+
+        res.json(categoryStats);
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
 module.exports = router;

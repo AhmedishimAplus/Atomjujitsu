@@ -36,19 +36,6 @@ const CashierInterface: React.FC = () => {
     };
     fetchData();
   }, []);
-  // Create efficient category lookup
-  const categoryMap = useMemo(() => {
-    const map = new Map();
-    categories.forEach(cat => {
-      if (cat._id && cat.name) {
-        map.set(cat._id, {
-          name: cat.name,
-          subcategories: cat.subcategories || []
-        });
-      }
-    });
-    return map;
-  }, [categories]);
 
   // Filter products based on search term
   const filteredProducts = useMemo(() =>
@@ -57,26 +44,45 @@ const CashierInterface: React.FC = () => {
       product.isAvailable
     ), [products, searchTerm]);
 
-  // Group products by category and subcategory
+  // Group products by category and subcategory, showing all categories/subcategories
   const productsByCategory = useMemo(() => {
     const grouped: Record<string, Record<string, ProductItem[]>> = {};
-
-    filteredProducts.forEach(product => {
-      const category = categoryMap.get(product.categoryId);
-      const categoryName = category ? category.name : 'Uncategorized';
-      const subcategoryName = product.subcategory || 'Uncategorized';
-
-      if (!grouped[categoryName]) {
-        grouped[categoryName] = {};
+    // Initialize all categories and subcategories
+    categories.forEach(cat => {
+      if (cat.name) {
+        grouped[cat.name] = {};
+        (cat.subcategories || []).forEach((subcat: { name: string }) => {
+          if (subcat.name) {
+            grouped[cat.name][subcat.name] = [];
+          }
+        });
       }
-      if (!grouped[categoryName][subcategoryName]) {
-        grouped[categoryName][subcategoryName] = [];
-      }
-      grouped[categoryName][subcategoryName].push(product);
     });
-
+    // Place products in their correct category/subcategory
+    filteredProducts.forEach((product: ProductItem) => {
+      // Handle both string and object for categoryId
+      let catId: string | undefined = undefined;
+      if (typeof product.categoryId === 'string') {
+        catId = product.categoryId;
+      } else if (product.categoryId && typeof product.categoryId === 'object' && '_id' in product.categoryId) {
+        catId = (product.categoryId as any)._id;
+      }
+      const cat = categories.find(c => c._id === catId);
+      if (cat && cat.name && product.subcategory) {
+        // Find the subcategory by case-insensitive, trimmed match
+        const subcat = (cat.subcategories || []).find((s: { name: string }) =>
+          s.name.trim().toLowerCase() === product.subcategory.trim().toLowerCase()
+        );
+        if (subcat) {
+          if (!grouped[cat.name][subcat.name]) {
+            grouped[cat.name][subcat.name] = [];
+          }
+          grouped[cat.name][subcat.name].push(product);
+        }
+      }
+    });
     return grouped;
-  }, [filteredProducts, categoryMap]);
+  }, [filteredProducts, categories]);
 
   // Handle adding item to order
   const handleAddItem = (product: ProductItem) => {
@@ -166,53 +172,56 @@ const CashierInterface: React.FC = () => {
             fullWidth
           />
         </div>
-
-        {Object.entries(productsByCategory).map(([category, subcats]) => (
-          <div key={category} className="mb-6">
-            <h2 className="text-lg font-semibold text-gray-800 mb-3">{category}</h2>
-            {Object.entries(subcats).map(([subcat, products]) => (
-              <div key={`${category}-${subcat}`} className="mb-4">
-                <h3 className="text-md font-medium text-gray-700 mb-2">{subcat}</h3>
+        {categories.map(cat => (
+          <div key={cat._id} className="mb-6">
+            <h2 className="text-lg font-semibold text-gray-800 mb-3">{cat.name}</h2>
+            {(cat.subcategories || []).map((subcat: { name: string }) => (
+              <div key={subcat.name} className="mb-4">
+                <h3 className="text-md font-medium text-gray-700 mb-2">{subcat.name}</h3>
                 <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
-                  {products.map((product) => (
-                    <Card key={product._id} className="transform transition-transform duration-200 hover:scale-105">
-                      <CardBody className="p-4">
-                        <div className="flex flex-col h-full">
-                          <h3 className="font-medium text-gray-900">{product.name}</h3>
-                          <div className="mt-1 text-sm text-gray-600">
-                            {product.description}
-                          </div>
-                          <div className="mt-auto pt-4">
-                            <div className="flex justify-between items-center">
-                              <div className="text-lg font-semibold">
-                                {state.currentOrder.staffDiscount ? (
-                                  <>
-                                    <span className="text-blue-600">${product.staffPrice.toFixed(2)}</span>
-                                    <span className="text-sm text-gray-500 line-through ml-2">
-                                      ${product.sellPrice.toFixed(2)}
-                                    </span>
-                                  </>
-                                ) : (
-                                  <span>${product.sellPrice.toFixed(2)}</span>
-                                )}
-                              </div>
-                              <Button
-                                variant="primary"
-                                size="sm"
-                                onClick={() => handleAddItem(product)}
-                                disabled={!product.isAvailable || product.stock <= 0}
-                              >
-                                Add
-                              </Button>
+                  {(productsByCategory[cat.name]?.[subcat.name] || []).length === 0 ? (
+                    <div className="text-gray-400 italic">No products</div>
+                  ) : (
+                    productsByCategory[cat.name][subcat.name].map(product => (
+                      <Card key={product._id} className="transform transition-transform duration-200 hover:scale-105">
+                        <CardBody className="p-4">
+                          <div className="flex flex-col h-full">
+                            <h3 className="font-medium text-gray-900">{product.name}</h3>
+                            <div className="mt-1 text-sm text-gray-600">
+                              {product.description}
                             </div>
-                            {product.stock <= 0 && (
-                              <p className="text-red-500 text-sm mt-1">Out of stock</p>
-                            )}
+                            <div className="mt-auto pt-4">
+                              <div className="flex justify-between items-center">
+                                <div className="text-lg font-semibold">
+                                  {state.currentOrder.staffDiscount ? (
+                                    <>
+                                      <span className="text-blue-600">${product.staffPrice.toFixed(2)}</span>
+                                      <span className="text-sm text-gray-500 line-through ml-2">
+                                        ${product.sellPrice.toFixed(2)}
+                                      </span>
+                                    </>
+                                  ) : (
+                                    <span>${product.sellPrice.toFixed(2)}</span>
+                                  )}
+                                </div>
+                                <Button
+                                  variant="primary"
+                                  size="sm"
+                                  onClick={() => handleAddItem(product)}
+                                  disabled={!product.isAvailable || product.stock <= 0}
+                                >
+                                  Add
+                                </Button>
+                              </div>
+                              {product.stock <= 0 && (
+                                <p className="text-red-500 text-sm mt-1">Out of stock</p>
+                              )}
+                            </div>
                           </div>
-                        </div>
-                      </CardBody>
-                    </Card>
-                  ))}
+                        </CardBody>
+                      </Card>
+                    ))
+                  )}
                 </div>
               </div>
             ))}
