@@ -19,6 +19,8 @@ export interface OrderItem {
   name: string;
   price: number;
   quantity: number;
+  regularPrice?: number;
+  staffPrice?: number;
 }
 
 export interface Order {

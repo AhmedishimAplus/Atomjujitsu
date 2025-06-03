@@ -1,4 +1,5 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
+import { getTokenRemainingTime } from '../../utils/jwt';
 
 interface NavItem {
   label: string;
@@ -18,6 +19,34 @@ const Navbar: React.FC<NavbarProps> = ({ logo, appName, navItems }) => {
   const navigationItems = navItems.filter(item => item.label !== 'Logout');
   const logoutItem = navItems.find(item => item.label === 'Logout');
 
+  // JWT Expiry Timer State
+  const [remaining, setRemaining] = useState<{ hours: string; minutes: string; seconds: string } | null>(null);
+
+  useEffect(() => {
+    const token = localStorage.getItem('token');
+    if (!token) {
+      setRemaining(null);
+      return;
+    }
+    const update = () => {
+      const time = getTokenRemainingTime(token);
+      setRemaining(time);
+    };
+    update();
+    const interval = setInterval(update, 1000);
+    return () => clearInterval(interval);
+  }, []);
+
+  // Format remaining time as HH:MM:SS
+  const formatTime = (time: { hours: string; minutes: string; seconds: string } | null) => {
+    if (!time) return '';
+    if (time.hours === '00' && time.minutes === '00' && time.seconds === '00') return 'Expired';
+    return `${time.hours}:${time.minutes}:${time.seconds}`;
+  };
+
+  // Show prompt if token is about to expire (less than 2 minutes)
+  const showPrompt = remaining !== null && remaining.hours === '00' && parseInt(remaining.minutes) < 2 && (remaining.hours !== '00' || remaining.minutes !== '00' || remaining.seconds !== '00');
+
   return (
     <nav className="bg-white border-b border-gray-200 shadow-sm">
       <div className="container mx-auto px-4">
@@ -30,6 +59,11 @@ const Navbar: React.FC<NavbarProps> = ({ logo, appName, navItems }) => {
           </div>
 
           <div className="flex items-center space-x-4">
+            {remaining !== null && (
+              <div className={`text-sm font-semibold px-3 py-1 rounded ${showPrompt ? 'bg-red-100 text-red-700' : 'bg-gray-100 text-gray-700'}`} title="Session expires soon">
+                Session: {formatTime(remaining)}
+              </div>
+            )}
             <div className="hidden md:flex md:space-x-4">
               {navigationItems.map((item, index) => (
                 <button
@@ -56,6 +90,11 @@ const Navbar: React.FC<NavbarProps> = ({ logo, appName, navItems }) => {
             )}
           </div>
         </div>
+        {showPrompt && (
+          <div className="text-center text-red-700 bg-red-50 py-1 rounded mt-2 font-medium">
+            Your session is about to expire. Please re-login to continue.
+          </div>
+        )}
       </div>
 
       {/* Mobile menu */}

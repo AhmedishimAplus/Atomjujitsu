@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useReducer, useEffect } from 'react';
-import { ProductItem, OrderItem, Order, StaffMember, Transaction, Expense } from '../types';
+import { ProductItem, Order, StaffMember, Transaction, Expense } from '../types';
 import { shouldResetAllowance, generateId } from '../utils/helpers';
 import { sampleProducts, sampleStaffMembers, generateSampleTransactions, generateSampleExpenses } from '../data/sampleData';
 
@@ -169,7 +169,9 @@ function appReducer(state: AppState, action: AppAction): AppState {
       // Update prices for all items based on the new discount setting
       const updatedItems = state.currentOrder.items.map(item => ({
         ...item,
-        price: enabled ? item.staffPrice : item.regularPrice
+        price: enabled
+          ? (typeof item.staffPrice === 'number' ? item.staffPrice : item.price)
+          : (typeof item.regularPrice === 'number' ? item.regularPrice : item.price)
       }));
 
       // Calculate new total with updated prices
@@ -216,7 +218,7 @@ function appReducer(state: AppState, action: AppAction): AppState {
         if (orderItem) {
           return {
             ...product,
-            quantity: Math.max(0, product.quantity - orderItem.quantity)
+            stock: Math.max(0, product.stock - orderItem.quantity)
           };
         }
         return product;
@@ -233,14 +235,14 @@ function appReducer(state: AppState, action: AppAction): AppState {
         if (staffMember) {
           const largeWaterBottleItem = completedOrder.items.find(
             item => {
-              const product = state.inventory.find(p => p.id === item.productId);
+              const product = state.inventory.find(p => p._id === item.productId);
               return product && product.name === 'Large Water Bottle';
             }
           );
 
           const smallWaterBottleItem = completedOrder.items.find(
             item => {
-              const product = state.inventory.find(p => p.id === item.productId);
+              const product = state.inventory.find(p => p._id === item.productId);
               return product && product.name === 'Small Water Bottle';
             }
           );
@@ -303,111 +305,12 @@ function appReducer(state: AppState, action: AppAction): AppState {
     }
 
     // Remove product from inventory
-    case 'DELETE_PRODUCT': {
-      return {
-        ...state,
-        inventory: state.inventory.filter(product => product._id !== action.payload)
-      };
-    }
-
-    // Complete an order and update inventory
-    case 'COMPLETE_ORDER': {
-      const { completedOrder } = action.payload;
-
-      // Update inventory quantities
-      const updatedInventory = state.inventory.map(product => {
-        const orderItem = completedOrder.items.find(item => item.productId === product._id);
-        if (orderItem) {
-          return {
-            ...product,
-            quantity: Math.max(0, product.quantity - orderItem.quantity)
-          };
-        }
-        return product;
-      });
-
-      // Reset current order
-      return {
-        ...state,
-        inventory: updatedInventory,
-        currentOrder: {
-          items: [],
-          total: 0,
-          staffDiscount: false,
-          staffName: ''
-        },
-        completedOrders: [...state.completedOrders, completedOrder]
-      };
-    }
-
-    // Update item quantity in current order
-    case 'UPDATE_ITEM_QUANTITY': {
-      const { productId, quantity } = action.payload;
-
-      const updatedItems = state.currentOrder.items.map(item => {
-        if (item.productId === productId) {
-          const product = state.inventory.find(p => p._id === item.productId);
-          if (product) {
-            const price = state.currentOrder.staffDiscount ? product.staffPrice : product.sellPrice;
-            return {
-              ...item,
-              quantity,
-              subtotal: price * quantity
-            };
-          }
-        }
-        return item;
-      });
-
-      return {
-        ...state,
-        currentOrder: {
-          ...state.currentOrder,
-          items: updatedItems,
-          total: updatedItems.reduce((sum, item) => sum + item.subtotal, 0)
-        }
-      };
-    }
-
-    // Toggle staff discount for current order
-    case 'SET_STAFF_DISCOUNT': {
-      const { enabled, staffName = '' } = action.payload;
-
-      // Update prices for all items based on the new discount setting
-      const updatedItems = state.currentOrder.items.map(item => ({
-        ...item,
-        price: enabled ? item.staffPrice : item.regularPrice
-      }));
-
-      // Calculate new total with updated prices
-      const total = updatedItems.reduce(
-        (sum, item) => sum + item.price * item.quantity,
-        0
-      );
-
-      return {
-        ...state,
-        currentOrder: {
-          ...state.currentOrder,
-          items: updatedItems,
-          total,
-          staffDiscount: enabled,
-          staffName: enabled ? staffName : ''
-        }
-      };
-    }
-
-    case 'RESET_ALLOWANCES':
-      return {
-        ...state,
-        staffMembers: state.staffMembers.map(staff => ({
-          ...staff,
-          waterBottleAllowance: {
-            large: 2,
-            small: 2
-          }
-        }))
-      };
+    // case 'DELETE_PRODUCT': {
+    //   return {
+    //     ...state,
+    //     inventory: state.inventory.filter(product => product._id !== action.payload)
+    //   };
+    // }
 
     default:
       return state;
