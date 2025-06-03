@@ -6,7 +6,7 @@ import Input from '../ui/Input';
 import Select from '../ui/Select';
 import Modal from '../ui/Modal';
 import { ProductItem } from '../../types';
-import { generateId } from '../../utils/helpers';
+
 import { Plus, Edit, Trash2 } from 'lucide-react';
 import {
   getProducts,
@@ -149,12 +149,10 @@ const InventoryManagement: React.FC = () => {
       // Only include costPrice if owner is Quarter
       if (formData.owner === 'Quarter') {
         payload.costPrice = parseFloat(formData.costPrice);
-      }
-
-      console.log('Submitting payload:', payload);
+      } console.log('Submitting payload:', payload);
 
       if (editingProduct) {
-        await updateProduct(editingProduct.id, payload);
+        await updateProduct(editingProduct._id, payload);
       } else {
         await createProduct(payload);
       }
@@ -178,13 +176,12 @@ const InventoryManagement: React.FC = () => {
   const handleOpenDeleteModal = (product: ProductItem) => {
     setEditingProduct(product);
     setDeleteModalOpen(true);
-  };
-  // Handle deleting product
+  };  // Handle deleting product
   const handleDeleteProduct = async () => {
     if (!editingProduct) return;
 
     try {
-      await deleteProduct(editingProduct.id);
+      await deleteProduct(editingProduct._id);
       await fetchProductsAndCategories();
       setDeleteModalOpen(false);
     } catch (error: any) {
@@ -336,47 +333,53 @@ const InventoryManagement: React.FC = () => {
                   </th>
                 </tr>
               </thead>
-              <tbody className="bg-white divide-y divide-gray-200">
-                {filteredProducts.map((product) => (
-                  <tr key={product.id} className="hover:bg-gray-50">
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="font-medium text-gray-900">{product.name}</div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="text-sm text-gray-500">{product.category}</div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="text-sm text-gray-900">{product.staffPrice}</div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="text-sm text-gray-900">{product.sellPrice}</div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="text-sm text-gray-900">{product.costPrice}</div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="text-sm text-gray-900">{product.stock}</div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => handleOpenProductModal(product)}
-                        className="text-blue-600 hover:text-blue-800 mr-2"
-                      >
-                        <Edit size={16} />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => handleOpenDeleteModal(product)}
-                        className="text-red-600 hover:text-red-800"
-                      >
-                        <Trash2 size={16} />
-                      </Button>
-                    </td>
-                  </tr>
-                ))}
+              <tbody className="bg-white divide-y divide-gray-200">                {filteredProducts.map((product) => (
+                <tr key={product._id} className="hover:bg-gray-50">
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <div className="font-medium text-gray-900">{product.name}</div>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    {categories.find(cat => cat._id === product.categoryId) && (
+                      <div className="flex flex-col">
+                        <span className="text-sm text-gray-700">
+                          {categories.find(cat => cat._id === product.categoryId)?.name}
+                        </span>
+                        <span className="text-xs text-gray-500">{product.subcategory}</span>
+                      </div>
+                    )}
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <div className="text-sm text-gray-900">{product.staffPrice}</div>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <div className="text-sm text-gray-900">{product.sellPrice}</div>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <div className="text-sm text-gray-900">{product.costPrice || 'N/A'}</div>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <div className="text-sm text-gray-900">{product.stock}</div>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => handleOpenProductModal(product)}
+                      className="text-blue-600 hover:text-blue-800 mr-2"
+                    >
+                      <Edit size={16} />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => handleOpenDeleteModal(product)}
+                      className="text-red-600 hover:text-red-800"
+                    >
+                      <Trash2 size={16} />
+                    </Button>
+                  </td>
+                </tr>
+              ))}
               </tbody>
             </table>
           </div>

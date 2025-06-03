@@ -1,7 +1,7 @@
 // Define types for the POS system
 
 export type ProductItem = {
-  id: string;
+  _id: string;
   name: string;
   staffPrice: number;
   sellPrice: number;
