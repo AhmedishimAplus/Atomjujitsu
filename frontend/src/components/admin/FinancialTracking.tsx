@@ -57,41 +57,10 @@ const FinancialTracking: React.FC = () => {
       });
       setProductCostMap(map);
     });
-    fetchAnalytics();
-    fetchWeekAnalytics();
+  
   }, []);
 
-  const fetchAnalytics = async () => {
-    setAnalyticsLoading(true);
-    setAnalyticsError(null);
-    try {
-      const res = await fetch('/api/sales/current-month-total', { headers: { 'Authorization': localStorage.getItem('token') ? `Bearer ${localStorage.getItem('token')}` : '' } });
-      if (res.ok) {
-        const data = await res.json();
-        setAnalytics(data);
-      } else {
-        setAnalyticsError('Failed to load analytics');
-      }
-    } catch (e) {
-      setAnalyticsError('Failed to load analytics');
-    } finally {
-      setAnalyticsLoading(false);
-    }
-  };
-
-  const fetchWeekAnalytics = async () => {
-    setWeekAnalyticsLoading(true);
-    setWeekAnalyticsError(null);
-    try {
-      const token = localStorage.getItem('token') || '';
-      const data = await getCurrentWeekTotal(token);
-      setWeekAnalytics(data);
-    } catch (e) {
-      setWeekAnalyticsError('Failed to load week analytics');
-    } finally {
-      setWeekAnalyticsLoading(false);
-    }
-  };
+  
 
   useEffect(() => {
     async function fetchBackendTotals() {
@@ -419,81 +388,7 @@ const FinancialTracking: React.FC = () => {
         </>
       ) : (
         <>
-          {/* Sales dashboard */}
-          {analyticsLoading || weekAnalyticsLoading ? (
-            <div className="text-center py-8 text-gray-500">Loading analytics...</div>
-          ) : analyticsError || weekAnalyticsError ? (
-            <div className="text-center py-8 text-red-500">{analyticsError || weekAnalyticsError}</div>
-          ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
-              {/* Total Profit Overall */}
-              <Card>
-                <CardBody className="p-4">
-                  <div>
-                    <p className="text-sm text-gray-500">Total Profit</p>
-                    <p className="text-2xl font-bold text-green-700">
-                      {formatCurrency(analytics.profit || 0)}
-                    </p>
-                  </div>
-                </CardBody>
-              </Card>
-              {/* Profit This Month */}
-              <Card>
-                <CardBody className="p-4">
-                  <div>
-                    <p className="text-sm text-gray-500">Profit This Month</p>
-                    <p className="text-2xl font-bold text-green-700">
-                      {formatCurrency(analytics.profit || 0)}
-                    </p>
-                  </div>
-                </CardBody>
-              </Card>
-              {/* Profit This Week */}
-              <Card>
-                <CardBody className="p-4">
-                  <div>
-                    <p className="text-sm text-gray-500">Profit This Week</p>
-                    <p className="text-2xl font-bold text-green-700">
-                      {formatCurrency(weekAnalytics.profit || 0)}
-                    </p>
-                  </div>
-                </CardBody>
-              </Card>
-              {/* Sales This Month */}
-              <Card>
-                <CardBody className="p-4">
-                  <div>
-                    <p className="text-sm text-gray-500">Sales This Month</p>
-                    <p className="text-2xl font-bold text-blue-700">
-                      {formatCurrency(analytics.sales || 0)}
-                    </p>
-                  </div>
-                </CardBody>
-              </Card>
-              {/* Sales This Week */}
-              <Card>
-                <CardBody className="p-4">
-                  <div>
-                    <p className="text-sm text-gray-500">Sales This Week</p>
-                    <p className="text-2xl font-bold text-blue-700">
-                      {formatCurrency(weekAnalytics.sales || 0)}
-                    </p>
-                  </div>
-                </CardBody>
-              </Card>
-              {/* Total Sales Overall */}
-              <Card>
-                <CardBody className="p-4">
-                  <div>
-                    <p className="text-sm text-gray-500">Total Sales</p>
-                    <p className="text-2xl font-bold text-blue-700">
-                      {formatCurrency(sales.reduce((sum, sale) => sum + (sale.total || 0), 0))}
-                    </p>
-                  </div>
-                </CardBody>
-              </Card>
-            </div>
-          )}
+          
           {/* Backend Month/Week Totals Cards */}
           {backendTotalsLoading ? (
             <div className="text-center py-8 text-gray-500">Loading backend totals...</div>
