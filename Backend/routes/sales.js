@@ -881,4 +881,54 @@ router.get('/sharoofa-settlement', auth, async (req, res) => {
     }
 });
 
+// Get sales history with costPrice, categoryId, and subcategory for each item
+router.get('/history-with-cost', auth, async (req, res) => {
+    try {
+        const { startDate, endDate, categoryId, subcategory } = req.query;
+        let saleQuery = {};
+        // Optional date filter
+        if (startDate && endDate) {
+            saleQuery.createdAt = {
+                $gte: new Date(startDate),
+                $lte: new Date(endDate)
+            };
+        }
+        // Fetch sales
+        const sales = await Sale.find(saleQuery).sort({ createdAt: -1 });
+        // For each sale, populate product info for each item
+        const productIds = Array.from(new Set(sales.flatMap(sale => sale.items.map(item => item.productId))));
+        const products = await Product.find({ _id: { $in: productIds } });
+        // Map productId to product info
+        const productMap = {};
+        products.forEach(prod => {
+            productMap[prod._id.toString()] = prod;
+        });
+        // Build sales with costPrice, categoryId, subcategory for each item
+        const salesWithCost = sales.map(sale => {
+            const filteredItems = sale.items
+                .map(item => {
+                    const prod = productMap[item.productId?.toString()];
+                    if (!prod) return null;
+                    // Filter by categoryId/subcategory if requested
+                    if (categoryId && prod.categoryId.toString() !== categoryId) return null;
+                    if (subcategory && prod.subcategory !== subcategory) return null;
+                    return {
+                        ...item.toObject(),
+                        costPrice: prod.costPrice,
+                        categoryId: prod.categoryId,
+                        subcategory: prod.subcategory
+                    };
+                })
+                .filter(Boolean);
+            return {
+                ...sale.toObject(),
+                items: filteredItems
+            };
+        });
+        res.json(salesWithCost);
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
 module.exports = router;
