@@ -130,6 +130,11 @@ router.post('/', [
                     return res.status(400).json({ error: `Product not found: ${item.name}` });
                 }
 
+                // Prevent overselling: check stock before decrementing
+                if (product.stock < item.quantity) {
+                    return res.status(400).json({ error: `Insufficient stock for product: ${item.name}` });
+                }
+
                 // Check if the product is a water bottle
                 if (product.name.toLowerCase().includes('large water bottle')) {
                     hasLargeWaterBottle = true;
@@ -148,16 +153,22 @@ router.post('/', [
             }
 
             // Update staff water bottle allowances
-            if (hasLargeWaterBottle && staff.Large_bottles > 0) {
-                staff.Large_bottles--;
-                sale.largeWaterBottle = true;
+            if (hasLargeWaterBottle) {
+                if (staff.Large_bottles > 0) {
+                    staff.Large_bottles--;
+                    sale.largeWaterBottle = true;
+                } else {
+                    return res.status(400).json({ error: 'Staff large water bottle allowance exceeded' });
+                }
             }
-
-            if (hasSmallWaterBottle && staff.Small_bottles > 0) {
-                staff.Small_bottles--;
-                sale.smallWaterBottle = true;
+            if (hasSmallWaterBottle) {
+                if (staff.Small_bottles > 0) {
+                    staff.Small_bottles--;
+                    sale.smallWaterBottle = true;
+                } else {
+                    return res.status(400).json({ error: 'Staff small water bottle allowance exceeded' });
+                }
             }
-
             await staff.save();
         } else {
             // If not a staff sale, update all product stock levels and calculate Sharoofa amount
@@ -166,12 +177,14 @@ router.post('/', [
                 if (!product) {
                     return res.status(400).json({ error: `Product not found: ${item.name}` });
                 }
-
+                // Prevent overselling: check stock before decrementing
+                if (product.stock < item.quantity) {
+                    return res.status(400).json({ error: `Insufficient stock for product: ${item.name}` });
+                }
                 // Calculate Sharoofa amount for this item
                 if (product.owner === 'Sharoofa') {
                     sharoofaAmount += item.priceUsed * item.quantity;
                 }
-
                 // Update product stock
                 product.stock = Math.max(0, product.stock - item.quantity);
                 await product.save();
@@ -179,7 +192,6 @@ router.post('/', [
         }
 
         // Set the Sharoofa amount in the sale
-        sale.sharoofaAmount = sharoofaAmount;        // Set the Sharoofa amount in the sale
         sale.sharoofaAmount = sharoofaAmount;
 
         // Save the sale

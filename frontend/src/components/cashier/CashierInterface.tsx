@@ -8,7 +8,7 @@ import Modal from '../ui/Modal';
 import { ProductItem } from '../../types';
 import { formatCurrency } from '../../utils/helpers';
 import { Trash2, Check, X, DollarSign, CreditCard, ChevronUp, ChevronDown } from 'lucide-react';
-import { getProducts, getCategories } from '../../services/api';
+import { getProducts, getCategories, createSale } from '../../services/api';
 import qrCodeImg from '../../assets/instapay.jpeg';
 
 const CashierInterface: React.FC = () => {
@@ -142,15 +142,39 @@ const CashierInterface: React.FC = () => {
   };
 
   // Handle payment
-  const handlePayment = () => {
-    dispatch({
-      type: 'COMPLETE_ORDER',
-      payload: {
-        paymentMethod
-      }
-    });
-    setPaymentModalOpen(false);
-    setReceiptModalOpen(true);
+  const handlePayment = async () => {
+    // Prepare payload for backend
+    const order = state.currentOrder;
+    const payload: any = {
+      items: order.items.map(item => ({
+        productId: item.productId,
+        name: item.name,
+        quantity: item.quantity,
+        regularPrice: item.regularPrice ?? item.price, // fallback if not present
+        staffPrice: item.staffPrice ?? item.price, // fallback if not present
+        priceUsed: item.price,
+      })),
+      subtotal: order.items.reduce((sum, item) => sum + item.price * item.quantity, 0),
+      staffDiscount: order.staffDiscount,
+      paymentMethod,
+      total: order.total,
+    };
+    if (order.staffDiscount) {
+      payload.staffName = staffName;
+    }
+    try {
+      await createSale(payload);
+      dispatch({
+        type: 'COMPLETE_ORDER',
+        payload: {
+          paymentMethod
+        }
+      });
+      setPaymentModalOpen(false);
+      setReceiptModalOpen(true);
+    } catch (e: any) {
+      alert(e?.response?.data?.error || 'Payment failed');
+    }
   };
 
   // Handle closing receipt and resetting
