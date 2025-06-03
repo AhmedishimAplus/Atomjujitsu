@@ -432,17 +432,18 @@ const FinancialTracking: React.FC = () => {
                       <tr><td colSpan={8} className="px-6 py-4 text-center text-gray-500">No sales found</td></tr>
                     ) : (
                       sales.flatMap((sale: any) => sale.items.map((item: any, idx: number) => {
-                        // Use productCostMap for cost price
-                        const costPrice = typeof item.productId === 'string' && productCostMap[item.productId] !== undefined
-                          ? productCostMap[item.productId]
-                          : (typeof item.costPrice === 'number' && !isNaN(item.costPrice) ? item.costPrice : 0);
-                        const profit = (item.priceUsed - costPrice) * item.quantity;
+                        // Get product info for category/subcategory/owner
+                        const product = typeof item.productId === 'string' ? products.find(p => p._id === item.productId) : undefined;
+                        const costPrice = productCostMap[item.productId] !== undefined ? productCostMap[item.productId] : (typeof item.costPrice === 'number' && !isNaN(item.costPrice) ? item.costPrice : 0);
+                        const owner = product?.owner || item.owner;
+                        // Only count profit if owner is not Sharoofa
+                        const profit = owner !== 'Sharoofa' ? (item.priceUsed - costPrice) * item.quantity : 0;
                         return (
                           <tr key={sale._id + '-' + idx}>
                             <td className="px-6 py-4 whitespace-nowrap">{formatDate(sale.createdAt)}</td>
                             <td className="px-6 py-4 whitespace-nowrap">{item.name}</td>
-                            <td className="px-6 py-4 whitespace-nowrap">{categories.find(cat => cat._id === (item.categoryId?.toString?.() || item.categoryId))?.name || ''}</td>
-                            <td className="px-6 py-4 whitespace-nowrap">{item.subcategory}</td>
+                            <td className="px-6 py-4 whitespace-nowrap">{product ? (categories.find(cat => cat._id === product.categoryId)?.name || '') : ''}</td>
+                            <td className="px-6 py-4 whitespace-nowrap">{product?.subcategory || ''}</td>
                             <td className="px-6 py-4 whitespace-nowrap text-right">{item.quantity}</td>
                             <td className="px-6 py-4 whitespace-nowrap text-right">{formatCurrency(item.priceUsed)}</td>
                             <td className="px-6 py-4 whitespace-nowrap text-right">{formatCurrency(costPrice)}</td>

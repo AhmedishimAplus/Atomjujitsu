@@ -182,6 +182,16 @@ router.delete('/:id/subcategories/:subcategoryName', auth, async (req, res) => {
         res.status(500).json({ error: error.message });
     }
 });
+router.get('/:id', auth, async (req, res) => {
+    const categoryId = req.params.id;
+    try {
+        const category = await Category.findById(categoryId).select('name').exec();
+        return res.json(category);
+    }
+    catch (error) {
+        return res.status(404).json({ error: 'Category not found' });
+    }
+});
 
 // Get category statistics with product details
 router.get('/statistics', auth, async (req, res) => {
@@ -190,10 +200,10 @@ router.get('/statistics', auth, async (req, res) => {
         const Product = require('../models/Product'); // Import Product model
 
         const categoryStats = [];
-        
+
         for (const category of categories) {
             const subcategoryStats = [];
-            
+
             // Process each subcategory
             for (const subcategory of category.subcategories) {
                 // Find all products in this subcategory
@@ -205,8 +215,8 @@ router.get('/statistics', auth, async (req, res) => {
 
                 // Calculate subcategory statistics
                 const totalStock = products.reduce((sum, product) => sum + product.stock, 0);
-                const avgSellPrice = products.length > 0 
-                    ? products.reduce((sum, product) => sum + product.sellPrice, 0) / products.length 
+                const avgSellPrice = products.length > 0
+                    ? products.reduce((sum, product) => sum + product.sellPrice, 0) / products.length
                     : 0;
                 const avgStaffPrice = products.length > 0
                     ? products.reduce((sum, product) => sum + product.staffPrice, 0) / products.length
