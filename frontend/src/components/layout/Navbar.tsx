@@ -70,8 +70,8 @@ const Navbar: React.FC<NavbarProps> = ({ logo, appName, navItems }) => {
                   key={index}
                   onClick={item.onClick}
                   className={`inline-flex items-center px-3 py-2 border border-transparent text-sm font-medium rounded-md transition-colors ${item.isActive
-                      ? 'bg-blue-100 text-blue-700'
-                      : 'text-gray-600 hover:bg-gray-100'
+                    ? 'bg-blue-100 text-blue-700'
+                    : 'text-gray-600 hover:bg-gray-100'
                     }`}
                 >
                   {item.icon && <span className="mr-2">{item.icon}</span>}
@@ -105,8 +105,8 @@ const Navbar: React.FC<NavbarProps> = ({ logo, appName, navItems }) => {
               key={index}
               onClick={item.onClick}
               className={`inline-flex items-center px-3 py-2 border border-transparent text-sm font-medium rounded-md transition-colors flex-shrink-0 ${item.isActive
-                  ? 'bg-blue-100 text-blue-700'
-                  : 'text-gray-600 hover:bg-gray-100'
+                ? 'bg-blue-100 text-blue-700'
+                : 'text-gray-600 hover:bg-gray-100'
                 }`}
             >
               {item.icon && <span className="mr-2">{item.icon}</span>}

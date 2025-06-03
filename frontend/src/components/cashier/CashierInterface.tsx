@@ -9,6 +9,7 @@ import { ProductItem } from '../../types';
 import { formatCurrency } from '../../utils/helpers';
 import { Trash2, Check, X, DollarSign, CreditCard, ChevronUp, ChevronDown } from 'lucide-react';
 import { getProducts, getCategories } from '../../services/api';
+import qrCodeImg from '../../assets/instapay.jpeg';
 
 const CashierInterface: React.FC = () => {
   const { state, dispatch } = useAppContext();
@@ -358,6 +359,15 @@ const CashierInterface: React.FC = () => {
                 InstaPay
               </Button>
             </div>
+            {paymentMethod === 'InstaPay' && (
+              <div className="flex flex-col items-center mt-4">
+                <img src={qrCodeImg} alt="InstaPay QR Code" className="w-72 h-72 object-contain border rounded shadow bg-white" style={{ background: '#fff', border: '1px solid #ddd' }} />
+                <div className="mt-2 text-sm text-gray-700 text-center">
+                  Scan this QR code with your InstaPay app to pay.<br />
+                  <span className="font-mono text-xs text-gray-500">ahmedaraby2002@instapay</span>
+                </div>
+              </div>
+            )}
           </div>
 
           <div className="border-t border-gray-200 pt-4">
