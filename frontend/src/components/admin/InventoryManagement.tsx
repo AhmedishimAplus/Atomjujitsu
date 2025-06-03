@@ -10,7 +10,7 @@ import { generateId } from '../../utils/helpers';
 import { Plus, Edit, Trash2 } from 'lucide-react';
 import { getProducts, createProduct, updateProduct, deleteProduct, createCategory, getCategories } from '../../services/api';
 
-const API_URL = import.meta.env.VITE_API_URL || `${window.location.origin}/api`;
+const API_URL = `${window.location.origin}/api`;
 
 const InventoryManagement: React.FC = () => {
   const { state, dispatch } = useAppContext();
@@ -105,15 +105,66 @@ const InventoryManagement: React.FC = () => {
 
   // Handle saving product (create or update via backend)
   const handleSaveProduct = async () => {
-    const payload = { ...formData };
-    if (formData.owner !== 'Quarter') delete payload.costPrice;
-    if (editingProduct) {
-      await updateProduct(editingProduct.id, payload);
-    } else {
-      await createProduct(payload);
+    try {
+      // Validate required fields
+      if (!formData.name || !formData.categoryId || !formData.subcategory) {
+        console.log('Form validation failed:', {
+          name: formData.name,
+          categoryId: formData.categoryId,
+          subcategory: formData.subcategory
+        });
+        alert('Please fill in all required fields (Name, Category, and Subcategory)');
+        return;
+      }
+
+      if (formData.staffPrice < 0 || formData.sellPrice < 0 || (formData.owner === 'Quarter' && formData.costPrice < 0)) {
+        alert('Prices cannot be negative');
+        return;
+      }
+
+      if (formData.stock < 0) {
+        alert('Stock cannot be negative');
+        return;
+      }
+
+      const payload: any = {
+        name: formData.name.trim(),
+        staffPrice: parseFloat(formData.staffPrice),
+        sellPrice: parseFloat(formData.sellPrice),
+        stock: parseInt(formData.stock),
+        owner: formData.owner,
+        categoryId: formData.categoryId,
+        subcategory: formData.subcategory,
+        description: formData.description?.trim() || '',
+        isAvailable: formData.isAvailable
+      };
+
+      // Only include costPrice if owner is Quarter
+      if (formData.owner === 'Quarter') {
+        payload.costPrice = parseFloat(formData.costPrice);
+      }
+
+      console.log('Submitting payload:', payload);
+
+      if (editingProduct) {
+        await updateProduct(editingProduct.id, payload);
+      } else {
+        await createProduct(payload);
+      }
+
+      setProductModalOpen(false);
+      fetchProductsAndCategories();
+    } catch (error: any) {
+      if (error.response?.data?.error) {
+        alert(error.response.data.error);
+      } else if (error.response?.data?.errors) {
+        const errorMessages = error.response.data.errors.map((e: any) => e.msg).join('\n');
+        alert(errorMessages);
+      } else {
+        alert('An error occurred while saving the product');
+      }
+      console.error('Error saving product:', error);
     }
-    setProductModalOpen(false);
-    fetchProductsAndCategories();
   };
 
   // Handle opening delete confirmation modal
@@ -150,23 +201,44 @@ const InventoryManagement: React.FC = () => {
     setCategoryForm(prev => ({ ...prev, subcategories: [...prev.subcategories, ''] }));
   };
   const handleRemoveSubcategoryField = (idx: number) => {
-    setCategoryForm(prev => ({ ...prev, subcategories: prev.subcategories.filter((_, i) => i !== idx) }));
+    setCategoryForm(prev => ({
+      ...prev,
+      subcategories: prev.subcategories.filter((_, i) => i !== idx)
+    }));
   };
   const handleAddCategory = async () => {
-    if (!categoryForm.name || !categoryForm.subcategories.filter(s => s.trim()).length) return;
-    await createCategory({ name: categoryForm.name, subcategories: categoryForm.subcategories.filter(s => s.trim()).map(s => ({ name: s })) });
+    if (!categoryForm.name || !categoryForm.subcategories.some(s => s.trim())) return;
+    const validSubcategories = categoryForm.subcategories.filter(s => s.trim());
+    await createCategory({
+      name: categoryForm.name,
+      subcategories: validSubcategories.map(s => ({ name: s }))
+    });
     fetchProductsAndCategories();
     setCategoryModalOpen(false);
   };
 
   // Category update/delete handlers
   const handleDeleteCategory = async (catId: string) => {
-    await fetch(`${API_URL}/categories/${catId}`, { method: 'DELETE', headers: { Authorization: `Bearer ${localStorage.getItem('token')}` } });
-    fetchProductsAndCategories();
+    try {
+      await fetch(`${API_URL}/categories/${catId}`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
+      });
+      fetchProductsAndCategories();
+    } catch (error) {
+      console.error('Error deleting category:', error);
+    }
   };
   const handleDeleteSubcategory = async (catId: string, subcatName: string) => {
-    await fetch(`${API_URL}/categories/${catId}/subcategories/${encodeURIComponent(subcatName)}`, { method: 'DELETE', headers: { Authorization: `Bearer ${localStorage.getItem('token')}` } });
-    fetchProductsAndCategories();
+    try {
+      await fetch(`${API_URL}/categories/${catId}/subcategories/${encodeURIComponent(subcatName)}`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
+      });
+      fetchProductsAndCategories();
+    } catch (error) {
+      console.error('Error deleting subcategory:', error);
+    }
   };
 
   return (
@@ -319,6 +391,7 @@ const InventoryManagement: React.FC = () => {
             onChange={handleInputChange}
             fullWidth
           />
+
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <Input
               type="number"

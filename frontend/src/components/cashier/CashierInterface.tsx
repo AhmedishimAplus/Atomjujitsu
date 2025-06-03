@@ -21,13 +21,25 @@ const CashierInterface: React.FC = () => {
   const [categories, setCategories] = useState<any[]>([]);
 
   useEffect(() => {
-    getProducts().then(setProducts);
-    getCategories().then(setCategories);
+    const fetchData = async () => {
+      try {
+        const [productsData, categoriesData] = await Promise.all([
+          getProducts(),
+          getCategories()
+        ]);
+        setProducts(productsData.filter((p: any) => p.isAvailable));
+        setCategories(categoriesData);
+      } catch (error) {
+        console.error('Error fetching data:', error);
+      }
+    };
+    fetchData();
   }, []);
 
   // Filter products based on search term
   const filteredProducts = products.filter(product =>
-    product.name.toLowerCase().includes(searchTerm.toLowerCase())
+    product.name.toLowerCase().includes(searchTerm.toLowerCase()) &&
+    product.isAvailable
   );
 
   // Group products by category and subcategory

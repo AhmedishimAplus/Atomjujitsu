@@ -83,10 +83,7 @@ router.post('/', [
         }
 
         // Verify owner matches category owner
-        if (category.owner !== req.body.owner) {
-            return res.status(400).json({ error: 'Product owner must match category owner' });
-        }
-
+      
         const subcategoryExists = category.subcategories.some(
             sub => sub.name === req.body.subcategory
         );
@@ -153,9 +150,7 @@ router.put('/:id', [
         }
 
         // Verify owner matches category owner
-        if (category.owner !== req.body.owner) {
-            return res.status(400).json({ error: 'Product owner must match category owner' });
-        }
+        
 
         const subcategoryExists = category.subcategories.some(
             sub => sub.name === req.body.subcategory
