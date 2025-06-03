@@ -57,10 +57,10 @@ const FinancialTracking: React.FC = () => {
       });
       setProductCostMap(map);
     });
-  
+
   }, []);
 
-  
+
 
   useEffect(() => {
     async function fetchBackendTotals() {
@@ -388,7 +388,7 @@ const FinancialTracking: React.FC = () => {
         </>
       ) : (
         <>
-          
+
           {/* Backend Month/Week Totals Cards */}
           {backendTotalsLoading ? (
             <div className="text-center py-8 text-gray-500">Loading backend totals...</div>
@@ -465,6 +465,7 @@ const FinancialTracking: React.FC = () => {
                     <tr>
                       <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date</th>
                       <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Product</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Owner</th>
                       <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Category</th>
                       <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Subcategory</th>
                       <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Qty</th>
@@ -500,6 +501,7 @@ const FinancialTracking: React.FC = () => {
                           <tr key={sale._id + '-' + idx}>
                             <td className="px-6 py-4 whitespace-nowrap">{formatDate(sale.createdAt)}</td>
                             <td className="px-6 py-4 whitespace-nowrap">{item.name}</td>
+                            <td className="px-6 py-4 whitespace-nowrap">{owner || ''}</td>
                             <td className="px-6 py-4 whitespace-nowrap">{categoryName}</td>
                             <td className="px-6 py-4 whitespace-nowrap">{product?.subcategory || ''}</td>
                             <td className="px-6 py-4 whitespace-nowrap text-right">{item.quantity}</td>
