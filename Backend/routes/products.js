@@ -266,4 +266,32 @@ router.get('/formatted-prices', auth, async (req, res) => {
     }
 });
 
+// Get low stock products
+router.get('/low-stock', auth, async (req, res) => {
+    try {
+        const products = await Product.find()
+            .populate('categoryId', 'name subcategories')
+            .lean();
+
+        // Filter products with low stock
+        const lowStockProducts = products.filter(product => {
+            // Default to 10 if minStock is not set (for older products before model update)
+            const minStock = product.minStock || 10;
+            return product.stock <= minStock * 1.2; // Products with stock at or below 120% of minimum
+        });
+
+        // Sort by stock level relative to minimum stock
+        lowStockProducts.sort((a, b) => {
+            const aRatio = a.stock / (a.minStock || 10);
+            const bRatio = b.stock / (b.minStock || 10);
+            return aRatio - bRatio;
+        });
+
+        res.json(lowStockProducts);
+    } catch (error) {
+        console.error('Error in low-stock endpoint:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
 module.exports = router;

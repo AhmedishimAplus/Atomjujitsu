@@ -10,21 +10,25 @@ const productSchema = new mongoose.Schema({
         type: Number,
         min: 0
     },
-    staffPrice:{
+    staffPrice: {
         type: Number,
         required: true,
         min: 0
     },
-    sellPrice:{
+    sellPrice: {
         type: Number,
         required: true,
         min: 0
-    },
-    stock: {
+    }, stock: {
         type: Number,
         required: true,
         min: 0,
         default: 0
+    },
+    minStock: {
+        type: Number,
+        min: 0,
+        default: 10
     },
     owner: {
         type: String,

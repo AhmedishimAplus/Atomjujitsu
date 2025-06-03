@@ -4,7 +4,7 @@ import { Card, CardHeader, CardBody } from '../ui/Card';
 import Button from '../ui/Button';
 import Select from '../ui/Select';
 import { formatCurrency, getWeekDates, getMonthDates } from '../../utils/helpers';
-import { BarChart3, TrendingUp, Download, ShoppingBag, DollarSign, Package } from 'lucide-react';
+import { BarChart3, TrendingUp, Download, ShoppingBag, DollarSign, Package, RefreshCw } from 'lucide-react';
 
 interface Product {
   _id: string;
@@ -18,11 +18,14 @@ const AnalyticsDashboard: React.FC = () => {
   const [reportType, setReportType] = useState<string>('weekly');
   const [salesData, setSalesData] = useState<{ label: string; value: number }[]>([]);
   const [expensesData, setExpensesData] = useState<{ label: string; value: number }[]>([]);
-  const [topProducts, setTopProducts] = useState<{ name: string; quantity: number; revenue: number }[]>([]);
-  const [totalSalesAmount, setTotalSalesAmount] = useState<number>(0);
+  const [topProducts, setTopProducts] = useState<{ name: string; quantity: number; revenue: number }[]>([]); const [totalSalesAmount, setTotalSalesAmount] = useState<number>(0);
   const [totalExpensesAmount, setTotalExpensesAmount] = useState<number>(0);
+  const [totalProfit, setTotalProfit] = useState<number>(0);
   const [totalTransactionsCount, setTotalTransactionsCount] = useState<number>(0);
   const [lowStockProducts, setLowStockProducts] = useState<Product[]>([]);
+  const [isLoading, setIsLoading] = useState<boolean>(true);
+  const [error, setError] = useState<string | null>(null);
+  const [lastUpdated, setLastUpdated] = useState<Date>(new Date());
 
   // Calculate date ranges
   const weekDates = getWeekDates();
@@ -35,6 +38,8 @@ const AnalyticsDashboard: React.FC = () => {
 
     // Function to fetch data
     const fetchData = async () => {
+      setIsLoading(true);
+      setError(null);
       try {
         // Fetch sales data based on report type
         const endpoint = reportType === 'weekly' ? '/api/sales/totals/week' : '/api/sales/totals/month';
@@ -49,6 +54,27 @@ const AnalyticsDashboard: React.FC = () => {
         const salesData = await salesRes.json();
         setTotalSalesAmount(salesData.totalSales || 0);
         setTotalTransactionsCount(salesData.totalCount || 0);
+
+        // If backend provides totalProfit, use it directly instead of calculating it
+        if (salesData.totalProfit !== undefined) {
+          setTotalProfit(salesData.totalProfit);
+        } else {
+          // If the original endpoint doesn't return profit, fetch from dedicated endpoint
+          try {
+            const profitEndpoint = `/api/sales/profit/${reportType === 'weekly' ? 'week' : 'month'}`;
+            const profitRes = await fetch(profitEndpoint, {
+              headers: { 'Authorization': token ? `Bearer ${token}` : '' }
+            });
+
+            if (profitRes.ok) {
+              const profitData = await profitRes.json();
+              setTotalProfit(profitData.totalProfit || 0);
+            }
+          } catch (profitError) {
+            console.error('Error fetching profit data:', profitError);
+            // Fall back to the difference between sales and expenses
+          }
+        }
 
         // Fetch expenses total
         const expenseEndpoint = reportType === 'weekly' ? '/api/expenses/current-week-total' : '/api/expenses/current-month-total';
@@ -74,15 +100,21 @@ const AnalyticsDashboard: React.FC = () => {
         }
       } catch (error) {
         console.error('Error fetching data:', error);
+        setError('Failed to load dashboard data. Please try again.');
+      } finally {
+        setIsLoading(false);
       }
     };
 
     fetchData();
   }, [reportType]);
-
   // Generate analytics based on report type
   useEffect(() => {
     const token = localStorage.getItem('token');
+
+    // We don't want to show the loading indicator again for this second data fetch
+    // since we already have the main metrics displayed
+    // setIsLoading(true) is only in the first useEffect
 
     // Function to fetch chart data
     const fetchChartData = async () => {
@@ -114,11 +146,13 @@ const AnalyticsDashboard: React.FC = () => {
           const dailySalesData = await dailySalesRes.json();
 
           // Update sales chart data
-          dailySalesData.forEach((item: any) => {
-            const date = new Date(item.date).toISOString().substring(0, 10);
-            // Exclude Sharoofa products by using the non-Sharoofa total
-            salesByDay[date] = item.nonSharoofaTotal || 0;
-          });
+          if (Array.isArray(dailySalesData)) {
+            dailySalesData.forEach((item: any) => {
+              const date = new Date(item.date).toISOString().substring(0, 10);
+              // Exclude Sharoofa products by using the non-Sharoofa total
+              salesByDay[date] = item.nonSharoofaTotal || 0;
+            });
+          }
         }
 
         // Fetch daily expenses data
@@ -131,10 +165,12 @@ const AnalyticsDashboard: React.FC = () => {
           const dailyExpensesData = await dailyExpensesRes.json();
 
           // Update expenses chart data
-          dailyExpensesData.forEach((item: any) => {
-            const date = new Date(item.date).toISOString().substring(0, 10);
-            expensesByDay[date] = item.total || 0;
-          });
+          if (Array.isArray(dailyExpensesData)) {
+            dailyExpensesData.forEach((item: any) => {
+              const date = new Date(item.date).toISOString().substring(0, 10);
+              expensesByDay[date] = item.total || 0;
+            });
+          }
         }
 
         // Format data for charts
@@ -164,28 +200,102 @@ const AnalyticsDashboard: React.FC = () => {
           const topProductsData = await topProductsRes.json();
 
           // Filter out Sharoofa products
-          const filteredProducts = topProductsData.filter((product: any) =>
-            product.owner !== 'Sharoofa'
-          );
+          if (Array.isArray(topProductsData)) {
+            const filteredProducts = topProductsData.filter((product: any) =>
+              product.owner !== 'Sharoofa'
+            );
 
-          setTopProducts(
-            filteredProducts.map((product: any) => ({
-              name: product.name,
-              quantity: product.quantity,
-              revenue: product.revenue
-            })).slice(0, 5)
-          );
+            setTopProducts(
+              filteredProducts.map((product: any) => ({
+                name: product.name,
+                quantity: product.quantity,
+                revenue: product.revenue
+              })).slice(0, 5)
+            );
+          } else {
+            setTopProducts([]);
+          }
         }
       } catch (error) {
         console.error('Error fetching chart data:', error);
+        // Don't overwrite main error if it's already set
+        if (!error) {
+          setError('Failed to load chart data. Please try again.');
+        }
+      } finally {
+        // Always update the timestamp when data is refreshed
+        setLastUpdated(new Date());
       }
     };
 
     fetchChartData();
   }, [reportType, weekDates, monthDates]);
+  // Note: totalProfit is now directly set from the API response
+  // We can fall back to calculation if API doesn't provide it
+  useEffect(() => {
+    if (totalProfit === 0) {
+      setTotalProfit(totalSalesAmount - totalExpensesAmount);
+    }
+  }, [totalSalesAmount, totalExpensesAmount, totalProfit]);
+  // Handle refreshing data
+  const handleRefresh = () => {
+    // Show loading state
+    setIsLoading(true);
 
-  // Calculate summary metrics
-  const totalProfit = totalSalesAmount - totalExpensesAmount;
+    // Directly trigger both data fetching functions
+    const token = localStorage.getItem('token');
+
+    // Create fresh fetch functions
+    const fetchMainData = async () => {
+      try {
+        const endpoint = reportType === 'weekly' ? '/api/sales/totals/week' : '/api/sales/totals/month';
+        const salesRes = await fetch(endpoint, {
+          headers: { 'Authorization': token ? `Bearer ${token}` : '' },
+          cache: 'no-store' // Prevent caching
+        });
+
+        if (salesRes.ok) {
+          const salesData = await salesRes.json();
+          setTotalSalesAmount(salesData.totalSales || 0);
+          setTotalTransactionsCount(salesData.totalCount || 0);
+
+          if (salesData.totalProfit !== undefined) {
+            setTotalProfit(salesData.totalProfit);
+          }
+        }
+
+        // Fetch expenses
+        const expenseEndpoint = reportType === 'weekly' ? '/api/expenses/current-week-total' : '/api/expenses/current-month-total';
+        const expensesRes = await fetch(expenseEndpoint, {
+          headers: { 'Authorization': token ? `Bearer ${token}` : '' },
+          cache: 'no-store' // Prevent caching
+        });
+
+        if (expensesRes.ok) {
+          const expenseData = await expensesRes.json();
+          setTotalExpensesAmount(expenseData.total || 0);
+        }
+
+        // Fetch low stock products
+        const productsRes = await fetch('/api/products/low-stock', {
+          headers: { 'Authorization': token ? `Bearer ${token}` : '' },
+          cache: 'no-store' // Prevent caching
+        });
+
+        if (productsRes.ok) {
+          const productsData = await productsRes.json();
+          setLowStockProducts(productsData);
+        }
+      } catch (error) {
+        console.error('Error refreshing data:', error);
+      } finally {
+        setIsLoading(false);
+        setLastUpdated(new Date());
+      }
+    };
+
+    fetchMainData();
+  };
 
   // Handle exporting report
   const handleExportReport = () => {
@@ -221,8 +331,22 @@ const AnalyticsDashboard: React.FC = () => {
   return (
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-        <h1 className="text-2xl font-bold text-gray-900">Analytics Dashboard</h1>
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900">Analytics Dashboard</h1>
+          <p className="text-xs text-gray-500 mt-1">
+            Last updated: {lastUpdated.toLocaleTimeString()} on {lastUpdated.toLocaleDateString()}
+          </p>
+        </div>
         <div className="flex items-center space-x-2">
+          <Button
+            variant="outline"
+            onClick={handleRefresh}
+            leftIcon={<RefreshCw size={18} />}
+            disabled={isLoading}
+            className="mr-2"
+          >
+            Refresh
+          </Button>
           <Select
             options={[
               { value: 'weekly', label: 'Weekly Report' },
@@ -231,17 +355,32 @@ const AnalyticsDashboard: React.FC = () => {
             value={reportType}
             onChange={setReportType}
             className="w-48"
+            disabled={isLoading}
           />
           <Button
             variant="outline"
             onClick={handleExportReport}
             leftIcon={<Download size={18} />}
+            disabled={isLoading || salesData.length === 0}
           >
             Export
           </Button>
         </div>
       </div>
 
+      {error && (
+        <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded relative" role="alert">
+          <strong className="font-bold">Error!</strong>
+          <span className="block sm:inline"> {error}</span>
+        </div>
+      )}      {isLoading && (
+        <div className="flex flex-col items-center justify-center py-4">
+          <div className="w-12 h-12 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
+          <p className="mt-2 text-gray-600">Loading data...</p>
+        </div>
+      )}
+
+      {/* Always show the dashboard content, regardless of loading state */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         <Card>
           <CardBody className="p-4">
@@ -249,6 +388,9 @@ const AnalyticsDashboard: React.FC = () => {
               <div>
                 <p className="text-sm text-gray-500">Total Sales</p>
                 <p className="text-2xl font-bold text-gray-900">{formatCurrency(totalSalesAmount)}</p>
+                <p className="text-xs text-gray-500 mt-1">
+                  {reportType === 'weekly' ? 'This Week' : 'This Month'}
+                </p>
               </div>
               <div className="bg-green-100 p-3 rounded-full text-green-600">
                 <DollarSign size={24} />
@@ -263,6 +405,9 @@ const AnalyticsDashboard: React.FC = () => {
               <div>
                 <p className="text-sm text-gray-500">Total Expenses</p>
                 <p className="text-2xl font-bold text-gray-900">{formatCurrency(totalExpensesAmount)}</p>
+                <p className="text-xs text-gray-500 mt-1">
+                  {reportType === 'weekly' ? 'This Week' : 'This Month'}
+                </p>
               </div>
               <div className="bg-red-100 p-3 rounded-full text-red-600">
                 <DollarSign size={24} />
@@ -273,12 +418,16 @@ const AnalyticsDashboard: React.FC = () => {
 
         <Card>
           <CardBody className="p-4">
-            <div className="flex justify-between items-center">
-              <div>
-                <p className="text-sm text-gray-500">Total Profit</p>
-                <p className="text-2xl font-bold text-gray-900">{formatCurrency(totalProfit)}</p>
-              </div>
-              <div className="bg-blue-100 p-3 rounded-full text-blue-600">
+            <div className="flex justify-between items-center">              <div>
+              <p className="text-sm text-gray-500">Total Profit</p>
+              <p className="text-2xl font-bold text-gray-900">{formatCurrency(totalProfit)}</p>
+              <p className="text-xs text-gray-500 mt-1">
+                {totalSalesAmount > 0
+                  ? `${(Math.max(0, (totalProfit / totalSalesAmount) * 100)).toFixed(1)}% margin`
+                  : 'No sales'}
+              </p>
+            </div>
+              <div className={`${totalProfit >= 0 ? 'bg-blue-100 text-blue-600' : 'bg-orange-100 text-orange-600'} p-3 rounded-full`}>
                 <TrendingUp size={24} />
               </div>
             </div>
@@ -290,7 +439,12 @@ const AnalyticsDashboard: React.FC = () => {
             <div className="flex justify-between items-center">
               <div>
                 <p className="text-sm text-gray-500">Transactions</p>
-                <p className="text-2xl font-bold text-gray-900">{totalTransactionsCount}</p>
+                <p className="text-2xl font-bold text-gray-900">{totalTransactionsCount || 0}</p>
+                <p className="text-xs text-gray-500 mt-1">
+                  {totalTransactionsCount && totalSalesAmount
+                    ? `Avg ${formatCurrency(totalSalesAmount / totalTransactionsCount)}`
+                    : 'No transactions'}
+                </p>
               </div>
               <div className="bg-amber-100 p-3 rounded-full text-amber-600">
                 <ShoppingBag size={24} />
@@ -312,16 +466,26 @@ const AnalyticsDashboard: React.FC = () => {
               {salesData.length > 0 ? (
                 <div className="h-full flex items-end space-x-2">
                   {salesData.map((item, index) => {
-                    const maxValue = Math.max(...salesData.map(d => d.value));
+                    const maxValue = Math.max(...salesData.map(d => d.value), 1); // Ensure we don't divide by zero
                     const height = maxValue > 0 ? (item.value / maxValue) * 100 : 0;
 
                     return (
                       <div key={index} className="flex flex-col items-center flex-1">
-                        <div
-                          className="w-full bg-blue-500 rounded-t transition-all duration-500 ease-in-out"
-                          style={{ height: `${height}%` }}
-                        ></div>
-                        <div className="text-xs mt-2 text-gray-600">{item.label}</div>
+                        <div className="flex flex-col items-center w-full">
+                          <span className="text-xs text-gray-600 mb-1">
+                            {formatCurrency(item.value)}
+                          </span>
+                          <div
+                            className="w-full bg-blue-500 rounded-t transition-all duration-500 ease-in-out"
+                            style={{
+                              height: `${Math.max(height, 5)}%`,
+                              minHeight: '8px'
+                            }}
+                          ></div>
+                          <div className="text-xs mt-2 text-gray-600 whitespace-nowrap overflow-hidden text-ellipsis max-w-full">
+                            {item.label}
+                          </div>
+                        </div>
                       </div>
                     );
                   })}
@@ -331,6 +495,115 @@ const AnalyticsDashboard: React.FC = () => {
                   No data available
                 </div>
               )}
+            </div>
+          </CardBody>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <h2 className="text-lg font-semibold text-gray-800">
+              {reportType === 'weekly' ? 'Weekly' : 'Monthly'} Expenses
+            </h2>
+          </CardHeader>
+          <CardBody className="p-4">
+            <div className="h-64">
+              {expensesData.length > 0 ? (
+                <div className="h-full flex items-end space-x-2">
+                  {expensesData.map((item, index) => {
+                    const maxValue = Math.max(...expensesData.map(d => d.value), 1); // Ensure we don't divide by zero
+                    const height = maxValue > 0 ? (item.value / maxValue) * 100 : 0;
+
+                    return (
+                      <div key={index} className="flex flex-col items-center flex-1">
+                        <div className="flex flex-col items-center w-full">
+                          <span className="text-xs text-gray-600 mb-1">
+                            {formatCurrency(item.value)}
+                          </span>
+                          <div
+                            className="w-full bg-red-500 rounded-t transition-all duration-500 ease-in-out"
+                            style={{
+                              height: `${Math.max(height, 5)}%`,
+                              minHeight: '8px'
+                            }}
+                          ></div>
+                          <div className="text-xs mt-2 text-gray-600 whitespace-nowrap overflow-hidden text-ellipsis max-w-full">
+                            {item.label}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : (
+                <div className="h-full flex items-center justify-center text-gray-500">
+                  No data available
+                </div>
+              )}
+            </div>
+          </CardBody>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <h2 className="text-lg font-semibold text-gray-800">Sales vs Expenses</h2>
+          </CardHeader>
+          <CardBody className="p-4">
+            <div className="h-64 flex flex-col justify-center">
+              <div className="w-full bg-gray-200 rounded-full h-8 mb-6">
+                {totalSalesAmount + totalExpensesAmount > 0 ? (
+                  <div
+                    className="bg-blue-500 h-8 rounded-l-full flex items-center justify-start pl-3"
+                    style={{
+                      width: `${Math.min(100, (totalSalesAmount / (totalSalesAmount + totalExpensesAmount)) * 100)}%`
+                    }}
+                  >
+                    <span className="text-xs font-medium text-white">
+                      Sales {((totalSalesAmount / (totalSalesAmount + totalExpensesAmount)) * 100).toFixed(1)}%
+                    </span>
+                  </div>
+                ) : (
+                  <div className="h-8 flex items-center justify-center">
+                    <span className="text-xs text-gray-600">No data</span>
+                  </div>
+                )}
+              </div>
+
+              <div className="flex justify-between mb-2">
+                <div className="text-sm text-gray-600">Sales: {formatCurrency(totalSalesAmount)}</div>
+                <div className="text-sm text-gray-600">Expenses: {formatCurrency(totalExpensesAmount)}</div>
+              </div>
+
+              <div className="mb-4">
+                <h3 className="text-base font-medium mb-2">Profit Margin</h3>
+                <div className="relative pt-1">
+                  {totalSalesAmount > 0 ? (
+                    <>
+                      <div className="flex mb-2 items-center justify-between">
+                        <div>
+                          <span className="text-xs font-semibold inline-block py-1 px-2 uppercase rounded-full text-blue-600 bg-blue-200">
+                            {totalSalesAmount > 0
+                              ? `${((totalProfit / totalSalesAmount) * 100).toFixed(1)}%`
+                              : '0%'
+                            }
+                          </span>
+                        </div>
+                        <div className="text-right">
+                          <span className="text-xs font-semibold inline-block text-blue-600">
+                            {formatCurrency(totalProfit)}
+                          </span>
+                        </div>
+                      </div>
+                      <div className="overflow-hidden h-2 mb-4 text-xs flex rounded bg-gray-200">
+                        <div style={{ width: `${Math.max(0, Math.min(100, (totalProfit / totalSalesAmount) * 100))}%` }}
+                          className={`shadow-none flex flex-col text-center whitespace-nowrap text-white justify-center ${totalProfit >= 0 ? 'bg-green-500' : 'bg-red-500'}`}>
+                        </div>
+                      </div>
+                    </>
+                  ) : (
+                    <div className="text-center text-gray-500 py-2">No sales data available</div>
+                  )}
+                </div>
+              </div>
             </div>
           </CardBody>
         </Card>
@@ -358,10 +631,13 @@ const AnalyticsDashboard: React.FC = () => {
                   </thead>
                   <tbody className="bg-white divide-y divide-gray-200">
                     {topProducts.map((product, index) => (
-                      <tr key={index} className="hover:bg-gray-50">
+                      <tr key={index} className={`hover:bg-gray-50 ${index < 3 ? 'bg-blue-50' : ''}`}>
                         <td className="px-6 py-4 whitespace-nowrap">
                           <div className="flex items-center">
-                            <div className="text-gray-900">{product.name}</div>
+                            <div className={`text-gray-900 font-${index < 3 ? 'medium' : 'normal'}`}>
+                              {index < 3 && <span className="inline-flex items-center justify-center w-5 h-5 mr-2 rounded-full bg-blue-100 text-blue-800 text-xs font-bold">{index + 1}</span>}
+                              {product.name}
+                            </div>
                           </div>
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-right">
@@ -387,56 +663,81 @@ const AnalyticsDashboard: React.FC = () => {
       <Card>
         <CardHeader className="flex justify-between items-center">
           <h2 className="text-lg font-semibold text-gray-800">Inventory Status</h2>
+          <div className="text-sm text-gray-600">
+            {lowStockProducts.length} {lowStockProducts.length === 1 ? 'product' : 'products'} need attention
+          </div>
         </CardHeader>
         <CardBody className="p-0">
-          <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-gray-200">
-              <thead className="bg-gray-50">
-                <tr>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Product
-                  </th>
-                  <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Current Stock
-                  </th>
-                  <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Reorder Threshold
-                  </th>
-                  <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Status
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="bg-white divide-y divide-gray-200">
-                {lowStockProducts.map((product) => (
-                  <tr key={product._id} className="hover:bg-gray-50">
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="flex items-center">
-                        <div className="text-sm font-medium text-gray-900">{product.name}</div>
-                      </div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-center">
-                      <div className="text-sm text-gray-900">{product.stock}</div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-center">
-                      <div className="text-sm text-gray-900">{product.minStock}</div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-center">
-                      {product.stock <= product.minStock ? (
-                        <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-red-100 text-red-800">
-                          Reorder Now
-                        </span>
-                      ) : (
-                        <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-yellow-100 text-yellow-800">
-                          Low Stock
-                        </span>
-                      )}
-                    </td>
+          {lowStockProducts.length > 0 ? (
+            <div className="overflow-x-auto">
+              <table className="min-w-full divide-y divide-gray-200">
+                <thead className="bg-gray-50">
+                  <tr>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Product
+                    </th>
+                    <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Current Stock
+                    </th>
+                    <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Reorder Threshold
+                    </th>
+                    <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Status
+                    </th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                </thead>
+                <tbody className="bg-white divide-y divide-gray-200">
+                  {lowStockProducts.map((product) => {
+                    // Calculate the percentage of stock remaining relative to threshold
+                    const stockPercentage = Math.min(100, (product.stock / product.minStock) * 100);
+                    const criticalThreshold = product.stock <= product.minStock * 0.5;
+
+                    return (
+                      <tr key={product._id} className="hover:bg-gray-50">
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div className="flex items-center">
+                            <div className="text-sm font-medium text-gray-900">{product.name}</div>
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-center">
+                          <div className="text-sm text-gray-900 font-semibold">{product.stock}</div>
+                          <div className="w-full bg-gray-200 rounded-full h-2.5 mt-2">
+                            <div
+                              className={`h-2.5 rounded-full ${criticalThreshold ? 'bg-red-600' :
+                                  product.stock <= product.minStock ? 'bg-yellow-500' : 'bg-yellow-300'
+                                }`}
+                              style={{ width: `${stockPercentage}%` }}
+                            ></div>
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-center">
+                          <div className="text-sm text-gray-900">{product.minStock}</div>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-center">
+                          {criticalThreshold ? (
+                            <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-red-100 text-red-800">
+                              Critical - Reorder Now
+                            </span>
+                          ) : product.stock <= product.minStock ? (
+                            <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-yellow-100 text-yellow-800">
+                              Below Threshold
+                            </span>
+                          ) : (
+                            <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-yellow-50 text-yellow-700">
+                              Low Stock
+                            </span>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <div className="py-8 text-center text-gray-500">No low stock products</div>
+          )}
         </CardBody>
       </Card>
     </div>

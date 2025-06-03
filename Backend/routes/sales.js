@@ -733,7 +733,7 @@ router.get('/history-with-cost', auth, async (req, res) => {
     }
 });
 
-// Calculate total sales (sum of sale.total) and total profit (sum of (priceUsed-costPrice)*quantity for non-Sharoofa products) for the current month
+// Get totals for the current month
 router.get('/totals/month', auth, async (req, res) => {
     try {
         const now = new Date();
@@ -745,27 +745,46 @@ router.get('/totals/month', auth, async (req, res) => {
             createdAt: { $gte: startOfMonth, $lte: endOfMonth }
         }).lean();
 
-        // Total sales is the sum of sale.total for all sales minus sum of sharoofaAmount
-        let totalSales = sales.reduce((sum, sale) => sum + (sale.total || 0), 0);
-        let sharoofaTotal = sales.reduce((sum, sale) => sum + (sale.sharoofaAmount || 0), 0);
-        totalSales -= sharoofaTotal;
+        // Calculate total sales excluding Sharoofa products
+        let totalSales = 0;
+        let sharoofaTotal = 0;
+
+        // Process each sale
+        for (const sale of sales) {
+            // Add to total sales
+            totalSales += (sale.total || 0);
+
+            // Subtract Sharoofa amount if present
+            if (sale.sharoofaAmount) {
+                sharoofaTotal += sale.sharoofaAmount;
+            }
+        }        // Total sales excluding Sharoofa products
+        const nonSharoofaTotal = totalSales - sharoofaTotal;
+
+        // Calculate profit from sales (excluding Sharoofa)
         let totalProfit = 0;
 
+        // Get cost prices for products sold
         for (const sale of sales) {
             for (const item of sale.items) {
-                const product = await Product.findById(item.productId).lean();
-                if (!product || product.owner === 'Sharoofa') continue;
-                const costPrice = typeof product.costPrice === 'number' ? product.costPrice : 0;
-                totalProfit += (item.priceUsed - costPrice) * item.quantity;
+                if (item.productId) {
+                    const product = await Product.findById(item.productId).lean();
+                    if (product && product.owner !== 'Sharoofa') {
+                        const costPrice = product.costPrice || 0;
+                        const sellPrice = item.priceUsed || 0;
+                        totalProfit += (sellPrice - costPrice) * item.quantity;
+                    }
+                }
             }
         }
 
         res.json({
-            totalSales,
-            totalProfit,
+            totalSales: nonSharoofaTotal,
+            totalProfit: totalProfit,
+            totalCount: sales.length,
             period: {
-                start: startOfMonth.toISOString().split('T')[0],
-                end: endOfMonth.toISOString().split('T')[0]
+                start: startOfMonth,
+                end: endOfMonth
             }
         });
     } catch (error) {
@@ -773,50 +792,367 @@ router.get('/totals/month', auth, async (req, res) => {
     }
 });
 
-// Calculate total sales (sum of sale.total) and total profit (sum of (priceUsed-costPrice)*quantity for non-Sharoofa products) for the current week
+// Get totals for the current week
 router.get('/totals/week', auth, async (req, res) => {
     try {
         const now = new Date();
-        const dayOfWeek = now.getDay();
-        let daysToSubtract;
-        if (dayOfWeek === 5) { // Friday
-            daysToSubtract = 0;
-        } else if (dayOfWeek === 6) { // Saturday
-            daysToSubtract = 1;
-        } else if (dayOfWeek === 0) { // Sunday
-            daysToSubtract = 2;
-        } else {
-            daysToSubtract = dayOfWeek + 2;
-        }
-        const startOfWeek = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() - daysToSubtract, 0, 0, 0, 0));
-        const endOfWeek = new Date(Date.UTC(startOfWeek.getUTCFullYear(), startOfWeek.getUTCMonth(), startOfWeek.getUTCDate() + 6, 23, 59, 59, 999));
+        const day = now.getDay(); // 0 = Sunday, 1 = Monday, etc.
+
+        // Calculate start of week (Sunday)
+        const startOfWeek = new Date(now);
+        startOfWeek.setDate(now.getDate() - day);
+        startOfWeek.setHours(0, 0, 0, 0);
+
+        // Calculate end of week (Saturday)
+        const endOfWeek = new Date(now);
+        endOfWeek.setDate(now.getDate() + (6 - day));
+        endOfWeek.setHours(23, 59, 59, 999);
 
         // Find all sales in the week
         const sales = await Sale.find({
             createdAt: { $gte: startOfWeek, $lte: endOfWeek }
         }).lean();
 
-        // Total sales is the sum of sale.total for all sales minus sum of sharoofaAmount
-        let totalSales = sales.reduce((sum, sale) => sum + (sale.total || 0), 0);
-        let sharoofaTotal = sales.reduce((sum, sale) => sum + (sale.sharoofaAmount || 0), 0);
-        totalSales -= sharoofaTotal;
+        // Calculate total sales excluding Sharoofa products
+        let totalSales = 0;
+        let sharoofaTotal = 0;
+
+        // Process each sale
+        for (const sale of sales) {
+            // Add to total sales
+            totalSales += (sale.total || 0);
+
+            // Subtract Sharoofa amount if present
+            if (sale.sharoofaAmount) {
+                sharoofaTotal += sale.sharoofaAmount;
+            }
+        }        // Total sales excluding Sharoofa products
+        const nonSharoofaTotal = totalSales - sharoofaTotal;
+
+        // Calculate profit from sales (excluding Sharoofa)
         let totalProfit = 0;
 
+        // Get cost prices for products sold
         for (const sale of sales) {
             for (const item of sale.items) {
-                const product = await Product.findById(item.productId).lean();
-                if (!product || product.owner === 'Sharoofa') continue;
-                const costPrice = typeof product.costPrice === 'number' ? product.costPrice : 0;
-                totalProfit += (item.priceUsed - costPrice) * item.quantity;
+                if (item.productId) {
+                    const product = await Product.findById(item.productId).lean();
+                    if (product && product.owner !== 'Sharoofa') {
+                        const costPrice = product.costPrice || 0;
+                        const sellPrice = item.priceUsed || 0;
+                        totalProfit += (sellPrice - costPrice) * item.quantity;
+                    }
+                }
             }
         }
 
         res.json({
-            totalSales,
-            totalProfit,
+            totalSales: nonSharoofaTotal,
+            totalProfit: totalProfit,
+            totalCount: sales.length,
             period: {
-                start: startOfWeek.toISOString().split('T')[0],
-                end: endOfWeek.toISOString().split('T')[0]
+                start: startOfWeek,
+                end: endOfWeek
+            }
+        });
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// Get daily sales data for the current month
+router.get('/daily/month', auth, async (req, res) => {
+    try {
+        const now = new Date();
+        const startOfMonth = new Date(Date.UTC(now.getFullYear(), now.getMonth(), 1, 0, 0, 0, 0));
+        const endOfMonth = new Date(Date.UTC(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999));
+
+        // Find all sales in the month
+        const sales = await Sale.find({
+            createdAt: { $gte: startOfMonth, $lte: endOfMonth }
+        }).lean();
+
+        // Group sales by day
+        const salesByDay = {};
+
+        for (const sale of sales) {
+            const date = new Date(sale.createdAt).toISOString().split('T')[0];
+
+            if (!salesByDay[date]) {
+                salesByDay[date] = {
+                    date,
+                    total: 0,
+                    sharoofaTotal: 0,
+                    nonSharoofaTotal: 0,
+                    count: 0
+                };
+            }
+
+            salesByDay[date].total += (sale.total || 0);
+            salesByDay[date].sharoofaTotal += (sale.sharoofaAmount || 0);
+            salesByDay[date].count += 1;
+        }
+
+        // Calculate non-Sharoofa total for each day
+        Object.keys(salesByDay).forEach(date => {
+            salesByDay[date].nonSharoofaTotal = salesByDay[date].total - salesByDay[date].sharoofaTotal;
+        });
+
+        const result = Object.values(salesByDay);
+
+        res.json(result);
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// Get daily sales data for the current week
+router.get('/daily/week', auth, async (req, res) => {
+    try {
+        const now = new Date();
+        const day = now.getDay(); // 0 = Sunday, 1 = Monday, etc.
+
+        // Calculate start of week (Sunday)
+        const startOfWeek = new Date(now);
+        startOfWeek.setDate(now.getDate() - day);
+        startOfWeek.setHours(0, 0, 0, 0);
+
+        // Calculate end of week (Saturday)
+        const endOfWeek = new Date(now);
+        endOfWeek.setDate(now.getDate() + (6 - day));
+        endOfWeek.setHours(23, 59, 59, 999);
+
+        // Find all sales in the week
+        const sales = await Sale.find({
+            createdAt: { $gte: startOfWeek, $lte: endOfWeek }
+        }).lean();
+
+        // Group sales by day
+        const salesByDay = {};
+
+        for (const sale of sales) {
+            const date = new Date(sale.createdAt).toISOString().split('T')[0];
+
+            if (!salesByDay[date]) {
+                salesByDay[date] = {
+                    date,
+                    total: 0,
+                    sharoofaTotal: 0,
+                    nonSharoofaTotal: 0,
+                    count: 0
+                };
+            }
+
+            salesByDay[date].total += (sale.total || 0);
+            salesByDay[date].sharoofaTotal += (sale.sharoofaAmount || 0);
+            salesByDay[date].count += 1;
+        }
+
+        // Calculate non-Sharoofa total for each day
+        Object.keys(salesByDay).forEach(date => {
+            salesByDay[date].nonSharoofaTotal = salesByDay[date].total - salesByDay[date].sharoofaTotal;
+        });
+
+        const result = Object.values(salesByDay);
+
+        res.json(result);
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// Get top products by revenue and quantity for the current month
+router.get('/top-products/month', auth, async (req, res) => {
+    try {
+        const now = new Date();
+        const startOfMonth = new Date(Date.UTC(now.getFullYear(), now.getMonth(), 1, 0, 0, 0, 0));
+        const endOfMonth = new Date(Date.UTC(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999));
+
+        // Find all sales in the month
+        const sales = await Sale.find({
+            createdAt: { $gte: startOfMonth, $lte: endOfMonth }
+        }).lean();
+
+        // Track product sales
+        const productSales = {};
+
+        // Process each sale
+        for (const sale of sales) {
+            for (const item of sale.items) {
+                const productId = item.productId.toString();
+
+                if (!productSales[productId]) {
+                    // Fetch product details to get the owner
+                    const product = await Product.findById(productId).lean();
+
+                    if (!product) continue;
+
+                    productSales[productId] = {
+                        productId,
+                        name: item.name,
+                        quantity: 0,
+                        revenue: 0,
+                        owner: product.owner || 'Unknown'
+                    };
+                }
+
+                productSales[productId].quantity += item.quantity;
+                productSales[productId].revenue += item.priceUsed * item.quantity;
+            }
+        }
+
+        // Convert to array and sort by revenue
+        const result = Object.values(productSales).sort((a, b) => b.revenue - a.revenue);
+
+        res.json(result);
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// Get top products by revenue and quantity for the current week
+router.get('/top-products/week', auth, async (req, res) => {
+    try {
+        const now = new Date();
+        const day = now.getDay(); // 0 = Sunday, 1 = Monday, etc.
+
+        // Calculate start of week (Sunday)
+        const startOfWeek = new Date(now);
+        startOfWeek.setDate(now.getDate() - day);
+        startOfWeek.setHours(0, 0, 0, 0);
+
+        // Calculate end of week (Saturday)
+        const endOfWeek = new Date(now);
+        endOfWeek.setDate(now.getDate() + (6 - day));
+        endOfWeek.setHours(23, 59, 59, 999);
+
+        // Find all sales in the week
+        const sales = await Sale.find({
+            createdAt: { $gte: startOfWeek, $lte: endOfWeek }
+        }).lean();
+
+        // Track product sales
+        const productSales = {};
+
+        // Process each sale
+        for (const sale of sales) {
+            for (const item of sale.items) {
+                const productId = item.productId.toString();
+
+                if (!productSales[productId]) {
+                    // Fetch product details to get the owner
+                    const product = await Product.findById(productId).lean();
+
+                    if (!product) continue;
+
+                    productSales[productId] = {
+                        productId,
+                        name: item.name,
+                        quantity: 0,
+                        revenue: 0,
+                        owner: product.owner || 'Unknown'
+                    };
+                }
+
+                productSales[productId].quantity += item.quantity;
+                productSales[productId].revenue += item.priceUsed * item.quantity;
+            }
+        }
+
+        // Convert to array and sort by revenue
+        const result = Object.values(productSales).sort((a, b) => b.revenue - a.revenue);
+
+        res.json(result);
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// Calculate profit separately (more robust approach)
+router.get('/profit/:period', auth, async (req, res) => {
+    try {
+        const { period } = req.params;
+        let startDate, endDate;
+        const now = new Date();
+
+        if (period === 'week') {
+            const day = now.getDay(); // 0 = Sunday, 1 = Monday, etc.
+            startDate = new Date(now);
+            startDate.setDate(now.getDate() - day);
+            startDate.setHours(0, 0, 0, 0);
+
+            endDate = new Date(now);
+            endDate.setDate(now.getDate() + (6 - day));
+            endDate.setHours(23, 59, 59, 999);
+        } else if (period === 'month') {
+            startDate = new Date(Date.UTC(now.getFullYear(), now.getMonth(), 1, 0, 0, 0, 0));
+            endDate = new Date(Date.UTC(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999));
+        } else {
+            return res.status(400).json({ error: 'Invalid period. Use "week" or "month".' });
+        }
+
+        // Find all sales in the period
+        const sales = await Sale.find({
+            createdAt: { $gte: startDate, $lte: endDate }
+        }).lean();
+
+        // Calculate profit from sales (excluding Sharoofa)
+        let totalProfit = 0;
+        let totalSales = 0;
+        let sharoofaTotal = 0;
+        let processedItems = 0;
+        let errorCount = 0;
+
+        // Process each sale
+        for (const sale of sales) {
+            // Add to total sales
+            totalSales += (sale.total || 0);
+
+            // Subtract Sharoofa amount if present
+            if (sale.sharoofaAmount) {
+                sharoofaTotal += sale.sharoofaAmount;
+            }
+        }
+
+        // Calculate non-Sharoofa total
+        const nonSharoofaTotal = totalSales - sharoofaTotal;
+
+        // Get cost prices for products sold
+        try {
+            for (const sale of sales) {
+                if (!sale.items || !Array.isArray(sale.items)) continue;
+
+                for (const item of sale.items) {
+                    if (item && item.productId) {
+                        try {
+                            processedItems++;
+                            const product = await Product.findById(item.productId).lean();
+                            if (product && product.owner !== 'Sharoofa') {
+                                const costPrice = product.costPrice || 0;
+                                const sellPrice = item.priceUsed || 0;
+                                const quantity = item.quantity || 0;
+                                totalProfit += (sellPrice - costPrice) * quantity;
+                            }
+                        } catch (err) {
+                            errorCount++;
+                            console.error(`Error processing product ${item.productId}:`, err);
+                        }
+                    }
+                }
+            }
+        } catch (err) {
+            console.error("Error calculating profits:", err);
+            return res.status(500).json({ error: "Error calculating profits" });
+        }
+
+        res.json({
+            totalSales: nonSharoofaTotal,
+            totalProfit: totalProfit,
+            totalItems: processedItems,
+            errorItems: errorCount,
+            period: {
+                start: startDate,
+                end: endDate
             }
         });
     } catch (error) {

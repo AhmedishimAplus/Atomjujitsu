@@ -65,9 +65,6 @@ router.get('/monthly', auth, async (req, res) => {
     }
 });
 
-// Get weekly expenses (grouped by week)
-
-
 // Get current month's total expenses
 router.get('/current-month-total', auth, async (req, res) => {
     try {
@@ -107,34 +104,21 @@ router.get('/current-month-total', auth, async (req, res) => {
     }
 });
 
-// Get current week's total expenses (strict Friday-to-Friday weeks, regardless of month boundaries)
+// Get current week's total expenses
 router.get('/current-week-total', auth, async (req, res) => {
     try {
-        // Create a Date object for "now" in UTC to ensure consistent timezone handling
         const now = new Date();
+        const day = now.getDay(); // 0 = Sunday, 1 = Monday, etc.
 
-        // Find the beginning of the current week (Friday-based weeks)
-        // A new week starts every Friday and ends the following Thursday
-        const dayOfWeek = now.getDay(); // 0 = Sunday, 5 = Friday, 6 = Saturday
-        let daysToSubtract;
+        // Calculate start of week (Sunday)
+        const startOfWeek = new Date(now);
+        startOfWeek.setDate(now.getDate() - day);
+        startOfWeek.setHours(0, 0, 0, 0);
 
-        if (dayOfWeek === 5) { // Friday - start of a new week
-            daysToSubtract = 0; // Today is the start of a new week
-        } else if (dayOfWeek === 6) { // Saturday
-            daysToSubtract = 1; // Go back to Friday (yesterday)
-        } else if (dayOfWeek === 0) { // Sunday
-            daysToSubtract = 2; // Go back to Friday (2 days ago)
-        } else {
-            // Monday (1) through Thursday (4)
-            // Go back to the most recent Friday
-            daysToSubtract = dayOfWeek + 2; // +2 because we're counting back from the previous Friday
-        }        // Create start date in UTC for consistent timezone handling
-        // Using the most recent Friday as the start of the week, regardless of month
-        const startOfWeek = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() - daysToSubtract, 0, 0, 0, 0));
-
-        // Calculate the end date (next Thursday at 23:59:59.999 UTC)
-        // If today is Thursday, end date is today; otherwise it's the next Thursday
-        const endOfWeek = new Date(Date.UTC(startOfWeek.getUTCFullYear(), startOfWeek.getUTCMonth(), startOfWeek.getUTCDate() + 6, 23, 59, 59, 999));
+        // Calculate end of week (Saturday)
+        const endOfWeek = new Date(now);
+        endOfWeek.setDate(now.getDate() + (6 - day));
+        endOfWeek.setHours(23, 59, 59, 999);
 
         const result = await Expense.aggregate([
             {
@@ -150,13 +134,12 @@ router.get('/current-week-total', auth, async (req, res) => {
             }
         ]);
 
-        const total = result.length > 0 ? result[0].total : 0;
-
         // Format dates to a readable format that doesn't show timezone
         const formatDate = (date) => {
             return date.toISOString().split('T')[0]; // Returns YYYY-MM-DD format
         };
 
+        const total = result.length > 0 ? result[0].total : 0;
         res.json({
             total,
             period: {
@@ -164,6 +147,89 @@ router.get('/current-week-total', auth, async (req, res) => {
                 end: formatDate(endOfWeek)
             }
         });
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// Get daily expenses for the current month
+router.get('/daily/month', auth, async (req, res) => {
+    try {
+        const now = new Date();
+        const startOfMonth = new Date(Date.UTC(now.getFullYear(), now.getMonth(), 1, 0, 0, 0, 0));
+        const endOfMonth = new Date(Date.UTC(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999));
+
+        const expenses = await Expense.find({
+            date: { $gte: startOfMonth, $lte: endOfMonth }
+        }).lean();
+
+        // Group expenses by day
+        const expensesByDay = {};
+
+        for (const expense of expenses) {
+            const date = new Date(expense.date).toISOString().split('T')[0]; // YYYY-MM-DD format
+
+            if (!expensesByDay[date]) {
+                expensesByDay[date] = {
+                    date,
+                    total: 0,
+                    count: 0
+                };
+            }
+
+            expensesByDay[date].total += expense.amount || 0;
+            expensesByDay[date].count += 1;
+        }
+
+        const result = Object.values(expensesByDay);
+
+        res.json(result);
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// Get daily expenses for the current week
+router.get('/daily/week', auth, async (req, res) => {
+    try {
+        const now = new Date();
+        const day = now.getDay(); // 0 = Sunday, 1 = Monday, etc.
+
+        // Calculate start of week (Sunday)
+        const startOfWeek = new Date(now);
+        startOfWeek.setDate(now.getDate() - day);
+        startOfWeek.setHours(0, 0, 0, 0);
+
+        // Calculate end of week (Saturday)
+        const endOfWeek = new Date(now);
+        endOfWeek.setDate(now.getDate() + (6 - day));
+        endOfWeek.setHours(23, 59, 59, 999);
+
+        const expenses = await Expense.find({
+            date: { $gte: startOfWeek, $lte: endOfWeek }
+        }).lean();
+
+        // Group expenses by day
+        const expensesByDay = {};
+
+        for (const expense of expenses) {
+            const date = new Date(expense.date).toISOString().split('T')[0]; // YYYY-MM-DD format
+
+            if (!expensesByDay[date]) {
+                expensesByDay[date] = {
+                    date,
+                    total: 0,
+                    count: 0
+                };
+            }
+
+            expensesByDay[date].total += expense.amount || 0;
+            expensesByDay[date].count += 1;
+        }
+
+        const result = Object.values(expensesByDay);
+
+        res.json(result);
     } catch (error) {
         res.status(500).json({ error: error.message });
     }
