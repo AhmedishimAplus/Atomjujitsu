@@ -1,37 +1,36 @@
 // Define types for the POS system
 
-export type ProductItem = {
+export interface ProductItem {
   _id: string;
   name: string;
-  staffPrice: number;
   sellPrice: number;
+  staffPrice: number;
   costPrice?: number;
   stock: number;
-  owner: 'Quarter' | 'Sharoofa';
   categoryId: string;
-  categoryName?: string;
   subcategory: string;
-  description?: string;
+  description: string;
   isAvailable: boolean;
-};
+  owner: string;
+}
 
-export type OrderItem = {
+export interface OrderItem {
   productId: string;
   name: string;
   price: number;
   quantity: number;
-};
+}
 
-export type Order = {
+export interface Order {
   id: string;
   items: OrderItem[];
   total: number;
   staffDiscount: boolean;
   staffName: string;
-  paymentMethod: 'InstaPay' | 'Cash';
+  paymentMethod?: 'Cash' | 'InstaPay';
   timestamp: Date;
   completed: boolean;
-};
+}
 
 export type StaffMember = {
   id: string;

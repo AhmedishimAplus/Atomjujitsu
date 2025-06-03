@@ -83,7 +83,7 @@ router.post('/', [
         }
 
         // Verify owner matches category owner
-      
+
         const subcategoryExists = category.subcategories.some(
             sub => sub.name === req.body.subcategory
         );
@@ -150,7 +150,7 @@ router.put('/:id', [
         }
 
         // Verify owner matches category owner
-        
+
 
         const subcategoryExists = category.subcategories.some(
             sub => sub.name === req.body.subcategory
@@ -238,4 +238,32 @@ router.delete('/:id', auth, async (req, res) => {
     }
 });
 
-module.exports = router; 
+// Get formatted product prices (with staff and regular prices)
+router.get('/formatted-prices', auth, async (req, res) => {
+    try {
+        const products = await Product.find()
+            .populate('categoryId', 'name subcategories')
+            .sort({ name: 1 });
+
+        const formattedProducts = products.map(product => ({
+            _id: product._id,
+            name: product.name,
+            description: product.description,
+            categoryId: product.categoryId,
+            subcategory: product.subcategory,
+            isAvailable: product.isAvailable,
+            stock: product.stock,
+            prices: {
+                regular: product.sellPrice,
+                staff: product.staffPrice
+            },
+            owner: product.owner
+        }));
+
+        res.json(formattedProducts);
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+module.exports = router;

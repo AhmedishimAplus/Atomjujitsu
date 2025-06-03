@@ -52,6 +52,11 @@ export const deleteProduct = async (id: string) => {
   return response.data;
 };
 
+export const getFormattedProducts = async () => {
+  const response = await api.get('/products/formatted-prices');
+  return response.data;
+};
+
 // Categories
 export const getCategories = async () => {
   const response = await api.get('/categories');

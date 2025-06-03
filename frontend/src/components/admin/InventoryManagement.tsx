@@ -19,6 +19,7 @@ import {
   deleteSubcategory
 } from '../../services/api';
 
+
 const InventoryManagement: React.FC = () => {
   const { state, dispatch } = useAppContext();
   const [searchTerm, setSearchTerm] = useState('');

@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import { useAppContext } from '../../context/AppContext';
 import { Card, CardHeader, CardBody, CardFooter } from '../ui/Card';
 import Button from '../ui/Button';
@@ -7,7 +7,7 @@ import Toggle from '../ui/Toggle';
 import Modal from '../ui/Modal';
 import { ProductItem } from '../../types';
 import { formatCurrency } from '../../utils/helpers';
-import { Minus, Plus, Trash2, Check, X, DollarSign, CreditCard } from 'lucide-react';
+import { Trash2, Check, X, DollarSign, CreditCard, ChevronUp, ChevronDown } from 'lucide-react';
 import { getProducts, getCategories } from '../../services/api';
 
 const CashierInterface: React.FC = () => {
@@ -17,9 +17,10 @@ const CashierInterface: React.FC = () => {
   const [receiptModalOpen, setReceiptModalOpen] = useState(false);
   const [paymentMethod, setPaymentMethod] = useState<'InstaPay' | 'Cash'>('Cash');
   const [staffName, setStaffName] = useState('');
-  const [products, setProducts] = useState<any[]>([]);
+  const [products, setProducts] = useState<ProductItem[]>([]);
   const [categories, setCategories] = useState<any[]>([]);
 
+  // Fetch products and categories on component mount
   useEffect(() => {
     const fetchData = async () => {
       try {
@@ -27,7 +28,7 @@ const CashierInterface: React.FC = () => {
           getProducts(),
           getCategories()
         ]);
-        setProducts(productsData.filter((p: any) => p.isAvailable));
+        setProducts(productsData.filter((p: ProductItem) => p.isAvailable));
         setCategories(categoriesData);
       } catch (error) {
         console.error('Error fetching data:', error);
@@ -35,23 +36,47 @@ const CashierInterface: React.FC = () => {
     };
     fetchData();
   }, []);
+  // Create efficient category lookup
+  const categoryMap = useMemo(() => {
+    const map = new Map();
+    categories.forEach(cat => {
+      if (cat._id && cat.name) {
+        map.set(cat._id, {
+          name: cat.name,
+          subcategories: cat.subcategories || []
+        });
+      }
+    });
+    return map;
+  }, [categories]);
 
   // Filter products based on search term
-  const filteredProducts = products.filter(product =>
-    product.name.toLowerCase().includes(searchTerm.toLowerCase()) &&
-    product.isAvailable
-  );
+  const filteredProducts = useMemo(() =>
+    products.filter(product =>
+      product.name.toLowerCase().includes(searchTerm.toLowerCase()) &&
+      product.isAvailable
+    ), [products, searchTerm]);
 
   // Group products by category and subcategory
-  const productsByCategory: Record<string, Record<string, any[]>> = {};
-  filteredProducts.forEach(product => {
-    const cat = categories.find((c: any) => c._id === product.categoryId);
-    const catName = cat ? cat.name : 'Uncategorized';
-    const subcatName = product.subcategory || 'Uncategorized';
-    if (!productsByCategory[catName]) productsByCategory[catName] = {};
-    if (!productsByCategory[catName][subcatName]) productsByCategory[catName][subcatName] = [];
-    productsByCategory[catName][subcatName].push(product);
-  });
+  const productsByCategory = useMemo(() => {
+    const grouped: Record<string, Record<string, ProductItem[]>> = {};
+
+    filteredProducts.forEach(product => {
+      const category = categoryMap.get(product.categoryId);
+      const categoryName = category ? category.name : 'Uncategorized';
+      const subcategoryName = product.subcategory || 'Uncategorized';
+
+      if (!grouped[categoryName]) {
+        grouped[categoryName] = {};
+      }
+      if (!grouped[categoryName][subcategoryName]) {
+        grouped[categoryName][subcategoryName] = [];
+      }
+      grouped[categoryName][subcategoryName].push(product);
+    });
+
+    return grouped;
+  }, [filteredProducts, categoryMap]);
 
   // Handle adding item to order
   const handleAddItem = (product: ProductItem) => {
@@ -145,31 +170,46 @@ const CashierInterface: React.FC = () => {
         {Object.entries(productsByCategory).map(([category, subcats]) => (
           <div key={category} className="mb-6">
             <h2 className="text-lg font-semibold text-gray-800 mb-3">{category}</h2>
-            {Object.entries(subcats).map(([subcat, prods]) => (
-              <div key={subcat} className="mb-4">
+            {Object.entries(subcats).map(([subcat, products]) => (
+              <div key={`${category}-${subcat}`} className="mb-4">
                 <h3 className="text-md font-medium text-gray-700 mb-2">{subcat}</h3>
                 <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
-                  {prods.map((product) => (
+                  {products.map((product) => (
                     <Card key={product._id} className="transform transition-transform duration-200 hover:scale-105">
                       <CardBody className="p-4">
-                        <h3 className="font-medium text-gray-800">{product.name}</h3>
-                        <p className="text-sm text-gray-500 mb-2">
-                          {state.currentOrder.staffDiscount
-                            ? formatCurrency(product.staffPrice)
-                            : formatCurrency(product.sellPrice)}
-                        </p>
-                        <p className="text-xs text-gray-500 mb-4">
-                          Available: {product.stock}
-                        </p>
-                        <Button
-                          variant="primary"
-                          size="sm"
-                          fullWidth
-                          onClick={() => handleAddItem(product)}
-                          disabled={product.stock === 0}
-                        >
-                          Add to Order
-                        </Button>
+                        <div className="flex flex-col h-full">
+                          <h3 className="font-medium text-gray-900">{product.name}</h3>
+                          <div className="mt-1 text-sm text-gray-600">
+                            {product.description}
+                          </div>
+                          <div className="mt-auto pt-4">
+                            <div className="flex justify-between items-center">
+                              <div className="text-lg font-semibold">
+                                {state.currentOrder.staffDiscount ? (
+                                  <>
+                                    <span className="text-blue-600">${product.staffPrice.toFixed(2)}</span>
+                                    <span className="text-sm text-gray-500 line-through ml-2">
+                                      ${product.sellPrice.toFixed(2)}
+                                    </span>
+                                  </>
+                                ) : (
+                                  <span>${product.sellPrice.toFixed(2)}</span>
+                                )}
+                              </div>
+                              <Button
+                                variant="primary"
+                                size="sm"
+                                onClick={() => handleAddItem(product)}
+                                disabled={!product.isAvailable || product.stock <= 0}
+                              >
+                                Add
+                              </Button>
+                            </div>
+                            {product.stock <= 0 && (
+                              <p className="text-red-500 text-sm mt-1">Out of stock</p>
+                            )}
+                          </div>
+                        </div>
                       </CardBody>
                     </Card>
                   ))}
@@ -197,33 +237,38 @@ const CashierInterface: React.FC = () => {
                 {state.currentOrder.items.map((item) => (
                   <div key={item.productId} className="flex items-center justify-between border-b border-gray-100 pb-3">
                     <div className="flex-1">
-                      <h3 className="font-medium text-gray-800">{item.name}</h3>
-                      <p className="text-sm text-gray-500">
-                        {formatCurrency(item.price)} x {item.quantity}
-                      </p>
+                      <div className="font-medium">{item.name}</div>
+                      <div className="text-sm text-gray-500">
+                        ${item.price.toFixed(2)} × {item.quantity}
+                      </div>
                     </div>
                     <div className="flex items-center space-x-2">
-                      <Button
-                        variant="ghost"
-                        size="xs"
-                        onClick={() => handleUpdateQuantity(item.productId, item.quantity - 1)}
-                      >
-                        <Minus size={16} />
-                      </Button>
-                      <span className="w-8 text-center">{item.quantity}</span>
-                      <Button
-                        variant="ghost"
-                        size="xs"
-                        onClick={() => handleUpdateQuantity(item.productId, item.quantity + 1)}
-                      >
-                        <Plus size={16} />
-                      </Button>
+                      <div className="text-right font-medium">
+                        ${(item.price * item.quantity).toFixed(2)}
+                      </div>
+                      <div className="flex flex-col space-y-1">
+                        <Button
+                          variant="ghost"
+                          size="xs"
+                          onClick={() => handleUpdateQuantity(item.productId, item.quantity + 1)}
+                        >
+                          <ChevronUp size={14} />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="xs"
+                          onClick={() => handleUpdateQuantity(item.productId, item.quantity - 1)}
+                        >
+                          <ChevronDown size={14} />
+                        </Button>
+                      </div>
                       <Button
                         variant="ghost"
                         size="xs"
                         onClick={() => handleRemoveItem(item.productId)}
+                        className="text-red-600 hover:text-red-800"
                       >
-                        <Trash2 size={16} className="text-red-500" />
+                        <Trash2 size={14} />
                       </Button>
                     </div>
                   </div>
