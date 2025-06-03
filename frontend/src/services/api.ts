@@ -102,6 +102,16 @@ export const getSalesHistoryWithCost = async (params?: {
   return response.data;
 };
 
+export async function getCurrentWeekTotal(token: string) {
+  const res = await fetch('/api/sales/current-week-total', {
+    headers: {
+      'Authorization': token ? `Bearer ${token}` : ''
+    }
+  });
+  if (!res.ok) throw new Error('Failed to fetch current week total');
+  return res.json();
+}
+
 // Staff
 export const getStaff = async () => {
   const response = await api.get('/staff');

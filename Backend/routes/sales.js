@@ -36,6 +36,10 @@ router.get('/', auth, async (req, res) => {
 // Get sale by ID
 router.get('/:id', auth, async (req, res) => {
     try {
+        // Validate that the id is a valid ObjectId before querying
+        if (!req.params.id || !req.params.id.match(/^[0-9a-fA-F]{24}$/)) {
+            return res.status(400).json({ error: 'Invalid sale ID format' });
+        }
         const sale = await Sale.findById(req.params.id)
             .populate('staffId', 'name')
             .populate('createdBy', 'name email');
@@ -202,210 +206,8 @@ router.post('/', [
     }
 });
 
-// Get current week's sales total (Friday-to-Friday weeks)
-router.get('/current-week-total', auth, async (req, res) => {
-    try {        // Create a Date object for "now" in UTC to ensure consistent timezone handling
-        const now = new Date();
 
-        // Find the beginning of the current week (Friday-based weeks)
-        // A new week starts every Friday and ends the following Thursday
-        const dayOfWeek = now.getDay(); // 0 = Sunday, 5 = Friday, 6 = Saturday
-        let daysToSubtract;
 
-        if (dayOfWeek === 5) { // Friday - start of a new week
-            daysToSubtract = 0; // Today is the start of a new week
-        } else if (dayOfWeek === 6) { // Saturday
-            daysToSubtract = 1; // Go back to Friday (yesterday)
-        } else if (dayOfWeek === 0) { // Sunday
-            daysToSubtract = 2; // Go back to Friday (2 days ago)
-        } else {
-            // Monday (1) through Thursday (4)
-            // Go back to the most recent Friday
-            daysToSubtract = dayOfWeek + 2; // +2 because we're counting back from the previous Friday
-        }
-
-        // Create start date in UTC for consistent timezone handling
-        // Using the most recent Friday as the start of the week, regardless of month
-        const startOfWeek = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() - daysToSubtract, 0, 0, 0, 0));
-
-        // Calculate the end date (next Thursday at 23:59:59.999 UTC)
-        // If today is Thursday, end date is today; otherwise it's the next Thursday
-        const endOfWeek = new Date(Date.UTC(startOfWeek.getUTCFullYear(), startOfWeek.getUTCMonth(), startOfWeek.getUTCDate() + 6, 23, 59, 59, 999));
-
-        // Get all sales for the period (both Quarter and Sharoofa)
-        const allSalesResult = await Sale.aggregate([
-            {
-                $match: {
-                    createdAt: { $gte: startOfWeek, $lte: endOfWeek }
-                }
-            },
-            {
-                $group: {
-                    _id: null,
-                    total: { $sum: "$total" }
-                }
-            }
-        ]);
-
-        // Get Quarter-only sales for profit calculation
-        const quarterSalesResult = await Sale.aggregate([
-            {
-                $match: {
-                    createdAt: { $gte: startOfWeek, $lte: endOfWeek }
-                }
-            },
-            {
-                $unwind: "$items"
-            },
-            {
-                $lookup: {
-                    from: "products",
-                    localField: "items.productId",
-                    foreignField: "_id",
-                    as: "productInfo"
-                }
-            },
-            {
-                $match: {
-                    "productInfo.owner": "Quarter"
-                }
-            },
-            {
-                $group: {
-                    _id: null,
-                    total: { $sum: { $multiply: ["$items.priceUsed", "$items.quantity"] } }
-                }
-            }
-        ]);        // Get weekly expenses for profit calculation (Quarter only)
-        const expenses = await Expense.aggregate([
-            {
-                $match: {
-                    date: { $gte: startOfWeek, $lte: endOfWeek }
-                }
-            },
-            {
-                $group: {
-                    _id: null,
-                    total: { $sum: "$amount" }
-                }
-            }
-        ]);
-
-        const allSalesTotal = allSalesResult.length > 0 ? allSalesResult[0].total : 0;
-        const quarterSalesTotal = quarterSalesResult.length > 0 ? quarterSalesResult[0].total : 0;
-        const expensesTotal = expenses.length > 0 ? expenses[0].total : 0;
-        // Profit calculation uses only Quarter sales
-        const profit = quarterSalesTotal - expensesTotal;        // Format dates to a readable format that doesn't show timezone
-        const formatDate = (date) => {
-            return date.toISOString().split('T')[0]; // Returns YYYY-MM-DD format
-        };
-
-        res.json({
-            sales: allSalesTotal,
-            quarterSales: quarterSalesTotal,
-            expenses: expensesTotal,
-            profit: profit, // Profit is calculated using only Quarter sales
-            period: {
-                start: formatDate(startOfWeek),
-                end: formatDate(endOfWeek)
-            }
-        });
-    } catch (error) {
-        res.status(500).json({ error: error.message });
-    }
-});
-
-// Get current month's sales total
-router.get('/current-month-total', auth, async (req, res) => {
-    try {
-        const now = new Date();
-        const startOfMonth = new Date(Date.UTC(now.getFullYear(), now.getMonth(), 1, 0, 0, 0, 0));
-        const endOfMonth = new Date(Date.UTC(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999));
-
-        // Get all sales for the period (both Quarter and Sharoofa)
-        const allSalesResult = await Sale.aggregate([
-            {
-                $match: {
-                    createdAt: { $gte: startOfMonth, $lte: endOfMonth }
-                }
-            },
-            {
-                $group: {
-                    _id: null,
-                    total: { $sum: "$total" }
-                }
-            }
-        ]);
-
-        // Get Quarter-only sales for profit calculation
-        const quarterSalesResult = await Sale.aggregate([
-            {
-                $match: {
-                    createdAt: { $gte: startOfMonth, $lte: endOfMonth }
-                }
-            },
-            {
-                $unwind: "$items"
-            },
-            {
-                $lookup: {
-                    from: "products",
-                    localField: "items.productId",
-                    foreignField: "_id",
-                    as: "productInfo"
-                }
-            },
-            {
-                $match: {
-                    "productInfo.owner": "Quarter"
-                }
-            },
-            {
-                $group: {
-                    _id: null,
-                    total: { $sum: { $multiply: ["$items.priceUsed", "$items.quantity"] } }
-                }
-            }
-        ]);        // Get monthly expenses for profit calculation (Quarter only)
-        const expenses = await Expense.aggregate([
-            {
-                $match: {
-                    date: { $gte: startOfMonth, $lte: endOfMonth }
-                }
-            },
-            {
-                $group: {
-                    _id: null,
-                    total: { $sum: "$amount" }
-                }
-            }
-        ]);
-
-        const allSalesTotal = allSalesResult.length > 0 ? allSalesResult[0].total : 0;
-        const quarterSalesTotal = quarterSalesResult.length > 0 ? quarterSalesResult[0].total : 0;
-        const expensesTotal = expenses.length > 0 ? expenses[0].total : 0;
-        // Profit calculation uses only Quarter sales
-        const profit = quarterSalesTotal - expensesTotal;
-
-        // Format dates to a readable format that doesn't show timezone
-        const formatDate = (date) => {
-            return date.toISOString().split('T')[0]; // Returns YYYY-MM-DD format
-        };
-
-        res.json({
-            sales: allSalesTotal,
-            quarterSales: quarterSalesTotal,
-            expenses: expensesTotal,
-            profit: profit, // Profit is calculated using only Quarter sales
-            period: {
-                start: formatDate(startOfMonth),
-                end: formatDate(endOfMonth)
-            }
-        });
-    } catch (error) {
-        res.status(500).json({ error: error.message });
-    }
-});
 
 // Get sales by product for the current month (for analytics)
 router.get('/product-analytics/month', auth, async (req, res) => {
@@ -926,6 +728,97 @@ router.get('/history-with-cost', auth, async (req, res) => {
             };
         });
         res.json(salesWithCost);
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// Calculate total sales (sum of sale.total) and total profit (sum of (priceUsed-costPrice)*quantity for non-Sharoofa products) for the current month
+router.get('/totals/month', auth, async (req, res) => {
+    try {
+        const now = new Date();
+        const startOfMonth = new Date(Date.UTC(now.getFullYear(), now.getMonth(), 1, 0, 0, 0, 0));
+        const endOfMonth = new Date(Date.UTC(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999));
+
+        // Find all sales in the month
+        const sales = await Sale.find({
+            createdAt: { $gte: startOfMonth, $lte: endOfMonth }
+        }).lean();
+
+        // Total sales is the sum of sale.total for all sales minus sum of sharoofaAmount
+        let totalSales = sales.reduce((sum, sale) => sum + (sale.total || 0), 0);
+        let sharoofaTotal = sales.reduce((sum, sale) => sum + (sale.sharoofaAmount || 0), 0);
+        totalSales -= sharoofaTotal;
+        let totalProfit = 0;
+
+        for (const sale of sales) {
+            for (const item of sale.items) {
+                const product = await Product.findById(item.productId).lean();
+                if (!product || product.owner === 'Sharoofa') continue;
+                const costPrice = typeof product.costPrice === 'number' ? product.costPrice : 0;
+                totalProfit += (item.priceUsed - costPrice) * item.quantity;
+            }
+        }
+
+        res.json({
+            totalSales,
+            totalProfit,
+            period: {
+                start: startOfMonth.toISOString().split('T')[0],
+                end: endOfMonth.toISOString().split('T')[0]
+            }
+        });
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// Calculate total sales (sum of sale.total) and total profit (sum of (priceUsed-costPrice)*quantity for non-Sharoofa products) for the current week
+router.get('/totals/week', auth, async (req, res) => {
+    try {
+        const now = new Date();
+        const dayOfWeek = now.getDay();
+        let daysToSubtract;
+        if (dayOfWeek === 5) { // Friday
+            daysToSubtract = 0;
+        } else if (dayOfWeek === 6) { // Saturday
+            daysToSubtract = 1;
+        } else if (dayOfWeek === 0) { // Sunday
+            daysToSubtract = 2;
+        } else {
+            daysToSubtract = dayOfWeek + 2;
+        }
+        const startOfWeek = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() - daysToSubtract, 0, 0, 0, 0));
+        const endOfWeek = new Date(Date.UTC(startOfWeek.getUTCFullYear(), startOfWeek.getUTCMonth(), startOfWeek.getUTCDate() + 6, 23, 59, 59, 999));
+
+        // Find all sales in the week
+        const sales = await Sale.find({
+            createdAt: { $gte: startOfWeek, $lte: endOfWeek }
+        }).lean();
+
+        // Total sales is the sum of sale.total for all sales minus sum of sharoofaAmount
+        let totalSales = sales.reduce((sum, sale) => sum + (sale.total || 0), 0);
+        let sharoofaTotal = sales.reduce((sum, sale) => sum + (sale.sharoofaAmount || 0), 0);
+        totalSales -= sharoofaTotal;
+        let totalProfit = 0;
+
+        for (const sale of sales) {
+            for (const item of sale.items) {
+                const product = await Product.findById(item.productId).lean();
+                if (!product || product.owner === 'Sharoofa') continue;
+                const costPrice = typeof product.costPrice === 'number' ? product.costPrice : 0;
+                totalProfit += (item.priceUsed - costPrice) * item.quantity;
+            }
+        }
+
+        res.json({
+            totalSales,
+            totalProfit,
+            period: {
+                start: startOfWeek.toISOString().split('T')[0],
+                end: endOfWeek.toISOString().split('T')[0]
+            }
+        });
     } catch (error) {
         res.status(500).json({ error: error.message });
     }

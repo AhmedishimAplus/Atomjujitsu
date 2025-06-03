@@ -8,7 +8,7 @@ import Modal from '../ui/Modal';
 import { Expense } from '../../types';
 import { formatCurrency, formatDate, generateId } from '../../utils/helpers';
 import { Plus, Calendar, DollarSign } from 'lucide-react';
-import { createExpense, getExpenses, getCategories, getSales, getProducts } from '../../services/api';
+import { createExpense, getExpenses, getCategories, getSales, getProducts, getCurrentWeekTotal } from '../../services/api';
 import { ProductItem } from '../../types';
 
 const FinancialTracking: React.FC = () => {
@@ -34,6 +34,9 @@ const FinancialTracking: React.FC = () => {
   const [analyticsLoading, setAnalyticsLoading] = useState<boolean>(true);
   const [products, setProducts] = useState<ProductItem[]>([]);
   const [productCostMap, setProductCostMap] = useState<Record<string, number>>({});
+  const [weekAnalytics, setWeekAnalytics] = useState<any>({});
+  const [weekAnalyticsError, setWeekAnalyticsError] = useState<string | null>(null);
+  const [weekAnalyticsLoading, setWeekAnalyticsLoading] = useState<boolean>(true);
 
   useEffect(() => {
     getExpenses().then(setDbExpenses);
@@ -49,6 +52,7 @@ const FinancialTracking: React.FC = () => {
       setProductCostMap(map);
     });
     fetchAnalytics();
+    fetchWeekAnalytics();
   }, []);
 
   const fetchAnalytics = async () => {
@@ -66,6 +70,20 @@ const FinancialTracking: React.FC = () => {
       setAnalyticsError('Failed to load analytics');
     } finally {
       setAnalyticsLoading(false);
+    }
+  };
+
+  const fetchWeekAnalytics = async () => {
+    setWeekAnalyticsLoading(true);
+    setWeekAnalyticsError(null);
+    try {
+      const token = localStorage.getItem('token') || '';
+      const data = await getCurrentWeekTotal(token);
+      setWeekAnalytics(data);
+    } catch (e) {
+      setWeekAnalyticsError('Failed to load week analytics');
+    } finally {
+      setWeekAnalyticsLoading(false);
     }
   };
 
@@ -186,6 +204,48 @@ const FinancialTracking: React.FC = () => {
       alert('Failed to add expense.');
     }
   };
+
+  // Helper to get week start/end (Friday to Thursday)
+  function getCurrentWeekRange() {
+    const now = new Date();
+    const day = now.getDay();
+    // Friday = 5
+    const daysSinceFriday = (day + 2) % 7; // 0=Sunday, 5=Friday
+    const start = new Date(now);
+    start.setDate(now.getDate() - daysSinceFriday);
+    start.setHours(0, 0, 0, 0);
+    const end = new Date(start);
+    end.setDate(start.getDate() + 6);
+    end.setHours(23, 59, 59, 999);
+    return { start, end };
+  }
+
+  // Calculate sales/profit for current week and month (excluding Sharoofa)
+  const { start: weekStart, end: weekEnd } = getCurrentWeekRange();
+  const now = new Date();
+  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+  const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999);
+
+  let weekSales = 0, weekProfit = 0, monthSales = 0, monthProfit = 0;
+  sales.forEach((sale: any) => {
+    const saleDate = new Date(sale.createdAt);
+    sale.items.forEach((item: any) => {
+      const product = typeof item.productId === 'string' ? products.find(p => p._id === item.productId) : undefined;
+      const owner = product?.owner || item.owner;
+      if (owner === 'Sharoofa') return;
+      const costPrice = productCostMap[item.productId] !== undefined ? productCostMap[item.productId] : (typeof item.costPrice === 'number' && !isNaN(item.costPrice) ? item.costPrice : 0);
+      const saleAmount = item.priceUsed * item.quantity;
+      const profit = (item.priceUsed - costPrice) * item.quantity;
+      if (saleDate >= weekStart && saleDate <= weekEnd) {
+        weekSales += saleAmount;
+        weekProfit += profit;
+      }
+      if (saleDate >= monthStart && saleDate <= monthEnd) {
+        monthSales += saleAmount;
+        monthProfit += profit;
+      }
+    });
+  });
 
   return (
     <div className="space-y-6">
@@ -332,10 +392,10 @@ const FinancialTracking: React.FC = () => {
       ) : (
         <>
           {/* Sales dashboard */}
-          {analyticsLoading ? (
+          {analyticsLoading || weekAnalyticsLoading ? (
             <div className="text-center py-8 text-gray-500">Loading analytics...</div>
-          ) : analyticsError ? (
-            <div className="text-center py-8 text-red-500">{analyticsError}</div>
+          ) : analyticsError || weekAnalyticsError ? (
+            <div className="text-center py-8 text-red-500">{analyticsError || weekAnalyticsError}</div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
               {/* Total Profit Overall */}
@@ -360,6 +420,17 @@ const FinancialTracking: React.FC = () => {
                   </div>
                 </CardBody>
               </Card>
+              {/* Profit This Week */}
+              <Card>
+                <CardBody className="p-4">
+                  <div>
+                    <p className="text-sm text-gray-500">Profit This Week</p>
+                    <p className="text-2xl font-bold text-green-700">
+                      {formatCurrency(weekAnalytics.profit || 0)}
+                    </p>
+                  </div>
+                </CardBody>
+              </Card>
               {/* Sales This Month */}
               <Card>
                 <CardBody className="p-4">
@@ -367,6 +438,17 @@ const FinancialTracking: React.FC = () => {
                     <p className="text-sm text-gray-500">Sales This Month</p>
                     <p className="text-2xl font-bold text-blue-700">
                       {formatCurrency(analytics.sales || 0)}
+                    </p>
+                  </div>
+                </CardBody>
+              </Card>
+              {/* Sales This Week */}
+              <Card>
+                <CardBody className="p-4">
+                  <div>
+                    <p className="text-sm text-gray-500">Sales This Week</p>
+                    <p className="text-2xl font-bold text-blue-700">
+                      {formatCurrency(weekAnalytics.sales || 0)}
                     </p>
                   </div>
                 </CardBody>
@@ -438,11 +520,23 @@ const FinancialTracking: React.FC = () => {
                         const owner = product?.owner || item.owner;
                         // Only count profit if owner is not Sharoofa
                         const profit = owner !== 'Sharoofa' ? (item.priceUsed - costPrice) * item.quantity : 0;
+                        // Get category name from product.categoryId
+                        let categoryName = '';
+                        if (product && product.categoryId) {
+                          let catId: string = '';
+                          if (typeof product.categoryId === 'string') {
+                            catId = product.categoryId;
+                          } else if (typeof product.categoryId === 'object' && product.categoryId !== null && '_id' in product.categoryId) {
+                            catId = (product.categoryId as any)._id;
+                          }
+                          const cat = categories.find((c: any) => c._id === catId);
+                          categoryName = cat ? cat.name : '';
+                        }
                         return (
                           <tr key={sale._id + '-' + idx}>
                             <td className="px-6 py-4 whitespace-nowrap">{formatDate(sale.createdAt)}</td>
                             <td className="px-6 py-4 whitespace-nowrap">{item.name}</td>
-                            <td className="px-6 py-4 whitespace-nowrap">{product ? (categories.find(cat => cat._id === product.categoryId)?.name || '') : ''}</td>
+                            <td className="px-6 py-4 whitespace-nowrap">{categoryName}</td>
                             <td className="px-6 py-4 whitespace-nowrap">{product?.subcategory || ''}</td>
                             <td className="px-6 py-4 whitespace-nowrap text-right">{item.quantity}</td>
                             <td className="px-6 py-4 whitespace-nowrap text-right">{formatCurrency(item.priceUsed)}</td>
