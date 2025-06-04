@@ -24,11 +24,11 @@ const InventoryManagement: React.FC = () => {
   const { } = useAppContext(); // Keeping the context import for future use
   const [searchTerm, setSearchTerm] = useState('');
   const [productModalOpen, setProductModalOpen] = useState(false);
-  const [deleteModalOpen, setDeleteModalOpen] = useState(false);  const [editingProduct, setEditingProduct] = useState<ProductItem | null>(null);
+  const [deleteModalOpen, setDeleteModalOpen] = useState(false); const [editingProduct, setEditingProduct] = useState<ProductItem | null>(null);
   const [categoryModalOpen, setCategoryModalOpen] = useState(false);
   const [categoryForm, setCategoryForm] = useState({ name: '', subcategories: [''] });
   const [products, setProducts] = useState<any[]>([]);
-  const [editableField, setEditableField] = useState<{productId: string, field: string, value: string | number} | null>(null);
+  const [editableField, setEditableField] = useState<{ productId: string, field: string, value: string | number } | null>(null);
   const [formData, setFormData] = useState<any>({
     name: '',
     staffPrice: 0,
@@ -196,13 +196,13 @@ const InventoryManagement: React.FC = () => {
   const handleOpenCategoryModal = () => {
     setCategoryForm({ name: '', subcategories: [''] });
     setCategoryModalOpen(true);
-  };  const handleCategoryFormChange = (idx: number, value: string) => {
+  }; const handleCategoryFormChange = (idx: number, value: string) => {
     setCategoryForm((prev: typeof categoryForm) => {
       const newSubs = [...prev.subcategories];
       newSubs[idx] = value;
       return { ...prev, subcategories: newSubs };
     });
-  };  const handleCategoryNameChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  }; const handleCategoryNameChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setCategoryForm((prev: typeof categoryForm) => ({ ...prev, name: e.target.value }));
   };
   const handleAddSubcategoryField = () => {
@@ -279,8 +279,8 @@ const InventoryManagement: React.FC = () => {
 
       // Convert to number for numeric fields
       if (['staffPrice', 'sellPrice', 'costPrice', 'stock'].includes(field)) {
-        value = field === 'stock' 
-          ? Math.max(0, parseInt(value as string)) 
+        value = field === 'stock'
+          ? Math.max(0, parseInt(value as string))
           : Math.max(0, parseFloat(value as string));
       }
 
@@ -302,7 +302,7 @@ const InventoryManagement: React.FC = () => {
       alert('Failed to update product field.');
     }
   };
-  
+
   const handleIncrement = (productId: string, field: string, currentValue: number) => {
     try {
       const product = products.find(p => p._id === productId);
@@ -310,7 +310,7 @@ const InventoryManagement: React.FC = () => {
 
       let step = field === 'stock' ? 1 : 0.5;
       let newValue = Math.max(0, currentValue + step);
-      
+
       const payload = {
         ...product,
         [field]: newValue
@@ -328,7 +328,7 @@ const InventoryManagement: React.FC = () => {
       alert('Failed to update product field.');
     }
   };
-  
+
   const handleDecrement = (productId: string, field: string, currentValue: number) => {
     try {
       const product = products.find(p => p._id === productId);
@@ -336,7 +336,7 @@ const InventoryManagement: React.FC = () => {
 
       let step = field === 'stock' ? 1 : 0.5;
       let newValue = Math.max(0, currentValue - step);
-      
+
       const payload = {
         ...product,
         [field]: newValue
@@ -356,27 +356,25 @@ const InventoryManagement: React.FC = () => {
   };
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+    <div className="space-y-8"> {/* Increased vertical spacing */}
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6"> {/* Added bottom margin */}
         <h1 className="text-2xl font-bold text-gray-900">Inventory Management</h1>
         <div className="flex gap-2">
           <Button variant="primary" onClick={() => handleOpenProductModal()} leftIcon={<Plus size={18} />}>Add Product</Button>
           <Button variant="outline" onClick={handleOpenCategoryModal}>Add Category</Button>
         </div>
-      </div>
-
-      {/* Category Management Table */}
-      <Card>
-        <CardHeader>
+      </div>      {/* Category Management Table */}
+      <Card className="shadow-lg rounded-lg overflow-hidden border border-gray-200">
+        <CardHeader className="bg-white px-6 py-4 border-b border-gray-200">
           <h2 className="text-lg font-semibold text-gray-800">Categories & Subcategories</h2>
         </CardHeader>
-        <CardBody>
+        <CardBody className="p-4">
           <table className="min-w-full divide-y divide-gray-200">
             <thead className="bg-gray-50">
               <tr>
-                <th className="px-4 py-2">Category</th>
-                <th className="px-4 py-2">Subcategories</th>
-                <th className="px-4 py-2">Actions</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Category</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Subcategories</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
               </tr>
             </thead>
             <tbody>
@@ -401,11 +399,9 @@ const InventoryManagement: React.FC = () => {
             </tbody>
           </table>
         </CardBody>
-      </Card>
-
-      {/* Products Card */}
-      <Card>
-        <CardHeader className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+      </Card>      {/* Products Card */}
+      <Card className="shadow-lg rounded-lg overflow-hidden border border-gray-200 mt-8">
+        <CardHeader className="bg-white px-6 py-4 border-b border-gray-200 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
           <h2 className="text-lg font-semibold text-gray-800">Products</h2>
           <Input
             type="text"
@@ -414,56 +410,64 @@ const InventoryManagement: React.FC = () => {
             onChange={(e) => setSearchTerm(e.target.value)}
             className="w-full sm:w-64"
           />
-        </CardHeader>
-
-        <CardBody className="p-0">
+        </CardHeader>        <CardBody className="p-0">
           <div className="overflow-x-auto">
             <table className="min-w-full divide-y divide-gray-200">
-              <thead className="bg-gray-50">                <tr>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Name
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Category
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Subcategory
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Owner
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Staff Price
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Sell Price
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Cost Price
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Stock
-                  </th>
-                  <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Actions
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="bg-white divide-y divide-gray-200">
+              <thead className="bg-gray-50 sticky top-0"><tr>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Name
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Category
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Subcategory
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Owner
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Staff Price
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Sell Price
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Cost Price
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Stock
+                </th>
+                <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Actions
+                </th>
+              </tr>
+              </thead>              <tbody className="bg-white divide-y divide-gray-200">
                 {filteredProducts.map((product) => (
-                  <tr key={product._id} className="hover:bg-gray-50">
+                  <tr key={product._id} className="hover:bg-gray-50 transition-colors">
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div className="font-medium text-gray-900">{product.name}</div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="text-sm text-gray-900">
-                        {product.categoryId?.name || 'N/A'}
+                      <div className="flex items-center">
+                        <span className="text-sm text-gray-900 min-w-[40px]">
+                          {product.categoryId?.name || 'N/A'}
+                        </span>
                       </div>
-                    </td>                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="text-sm text-gray-900">{product.subcategory || 'N/A'}</div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="text-sm text-gray-900">{product.owner || 'Quarter'}</div>
+                      <div className="flex items-center">
+                        <span className="text-sm text-gray-900 min-w-[40px]">
+                          {product.subcategory || 'N/A'}
+                        </span>
+                      </div>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <div className="flex items-center">
+                        <span className="text-sm text-gray-900 min-w-[40px]">
+                          {product.owner || 'Quarter'}
+                        </span>
+                      </div>
                     </td>                    <td className="px-6 py-4 whitespace-nowrap">
                       {editableField && editableField.productId === product._id && editableField.field === 'staffPrice' ? (
                         <div className="flex items-center">
@@ -480,21 +484,21 @@ const InventoryManagement: React.FC = () => {
                           />
                         </div>
                       ) : (
-                        <div className="flex items-center text-sm text-gray-900 group">                          <button 
-                            className="opacity-0 group-hover:opacity-100 w-5 h-5 flex items-center justify-center rounded-full mr-1 text-gray-500 hover:text-white hover:bg-red-500 transition-all"
-                            onClick={() => handleDecrement(product._id, 'staffPrice', product.staffPrice)}
-                          >
-                            -
-                          </button>
-                          
-                          <span 
+                        <div className="flex items-center text-sm text-gray-900 group">                          <button
+                          className="opacity-0 group-hover:opacity-100 w-5 h-5 flex items-center justify-center rounded-full mr-1 text-gray-500 hover:text-white hover:bg-red-500 transition-all"
+                          onClick={() => handleDecrement(product._id, 'staffPrice', product.staffPrice)}
+                        >
+                          -
+                        </button>
+
+                          <span
                             className="cursor-pointer min-w-[40px] text-center"
                             onDoubleClick={() => handleStartEditing(product._id, 'staffPrice', product.staffPrice)}
                           >
                             {product.staffPrice}
                           </span>
-                          
-                          <button 
+
+                          <button
                             className="opacity-0 group-hover:opacity-100 w-5 h-5 flex items-center justify-center rounded-full ml-1 text-gray-500 hover:text-white hover:bg-green-500 transition-all"
                             onClick={() => handleIncrement(product._id, 'staffPrice', product.staffPrice)}
                           >
@@ -519,21 +523,21 @@ const InventoryManagement: React.FC = () => {
                           />
                         </div>
                       ) : (
-                        <div className="flex items-center text-sm text-gray-900 group">                          <button 
-                            className="opacity-0 group-hover:opacity-100 w-5 h-5 flex items-center justify-center rounded-full mr-1 text-gray-500 hover:text-white hover:bg-red-500 transition-all"
-                            onClick={() => handleDecrement(product._id, 'sellPrice', product.sellPrice)}
-                          >
-                            -
-                          </button>
-                          
-                          <span 
+                        <div className="flex items-center text-sm text-gray-900 group">                          <button
+                          className="opacity-0 group-hover:opacity-100 w-5 h-5 flex items-center justify-center rounded-full mr-1 text-gray-500 hover:text-white hover:bg-red-500 transition-all"
+                          onClick={() => handleDecrement(product._id, 'sellPrice', product.sellPrice)}
+                        >
+                          -
+                        </button>
+
+                          <span
                             className="cursor-pointer min-w-[40px] text-center"
                             onDoubleClick={() => handleStartEditing(product._id, 'sellPrice', product.sellPrice)}
                           >
                             {product.sellPrice}
                           </span>
-                          
-                          <button 
+
+                          <button
                             className="opacity-0 group-hover:opacity-100 w-5 h-5 flex items-center justify-center rounded-full ml-1 text-gray-500 hover:text-white hover:bg-green-500 transition-all"
                             onClick={() => handleIncrement(product._id, 'sellPrice', product.sellPrice)}
                           >
@@ -559,30 +563,30 @@ const InventoryManagement: React.FC = () => {
                             />
                           </div>
                         ) : (
-                          <div className="flex items-center text-sm text-gray-900 group">                            <button 
-                              className="opacity-0 group-hover:opacity-100 w-5 h-5 flex items-center justify-center rounded-full mr-1 text-gray-500 hover:text-white hover:bg-red-500 transition-all"
-                              onClick={() => handleDecrement(product._id, 'costPrice', product.costPrice || 0)}
-                            >
-                              -
-                            </button>
-                            
-                            <span 
+                          <div className="flex items-center text-sm text-gray-900 group">                            <button
+                            className="opacity-0 group-hover:opacity-100 w-5 h-5 flex items-center justify-center rounded-full mr-1 text-gray-500 hover:text-white hover:bg-red-500 transition-all"
+                            onClick={() => handleDecrement(product._id, 'costPrice', product.costPrice || 0)}
+                          >
+                            -
+                          </button>
+
+                            <span
                               className="cursor-pointer min-w-[40px] text-center"
                               onDoubleClick={() => handleStartEditing(product._id, 'costPrice', product.costPrice || 0)}
                             >
                               {product.costPrice || 0}
                             </span>
-                            
-                            <button 
+
+                            <button
                               className="opacity-0 group-hover:opacity-100 w-5 h-5 flex items-center justify-center rounded-full ml-1 text-gray-500 hover:text-white hover:bg-green-500 transition-all"
                               onClick={() => handleIncrement(product._id, 'costPrice', product.costPrice || 0)}
                             >
                               +
                             </button>
-                          </div>
-                        )
-                      ) : (
-                        <div className="text-sm text-gray-500">N/A</div>
+                          </div>                        )) : (
+                        <div className="flex items-center justify-center">
+                          <span className="min-w-[40px] text-center px-2 py-1 rounded-md bg-gray-100 text-gray-500 font-medium border border-gray-200">N/A</span>
+                        </div>
                       )}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
@@ -601,21 +605,21 @@ const InventoryManagement: React.FC = () => {
                           />
                         </div>
                       ) : (
-                        <div className="flex items-center text-sm text-gray-900 group">                          <button 
-                            className="opacity-0 group-hover:opacity-100 w-5 h-5 flex items-center justify-center rounded-full mr-1 text-gray-500 hover:text-white hover:bg-red-500 transition-all"
-                            onClick={() => handleDecrement(product._id, 'stock', product.stock)}
-                          >
-                            -
-                          </button>
-                          
-                          <span 
+                        <div className="flex items-center text-sm text-gray-900 group">                          <button
+                          className="opacity-0 group-hover:opacity-100 w-5 h-5 flex items-center justify-center rounded-full mr-1 text-gray-500 hover:text-white hover:bg-red-500 transition-all"
+                          onClick={() => handleDecrement(product._id, 'stock', product.stock)}
+                        >
+                          -
+                        </button>
+
+                          <span
                             className="cursor-pointer min-w-[40px] text-center"
                             onDoubleClick={() => handleStartEditing(product._id, 'stock', product.stock)}
                           >
                             {product.stock}
                           </span>
-                          
-                          <button 
+
+                          <button
                             className="opacity-0 group-hover:opacity-100 w-5 h-5 flex items-center justify-center rounded-full ml-1 text-gray-500 hover:text-white hover:bg-green-500 transition-all"
                             onClick={() => handleIncrement(product._id, 'stock', product.stock)}
                           >
@@ -729,7 +733,7 @@ const InventoryManagement: React.FC = () => {
             options={[
               { value: 'Quarter', label: 'Quarter' },
               { value: 'Sharoofa', label: 'Sharoofa' }
-            ]}            value={formData.owner}
+            ]} value={formData.owner}
             onChange={val => setFormData((prev: typeof formData) => ({ ...prev, owner: val }))}
             fullWidth
           />          <Select
@@ -738,7 +742,7 @@ const InventoryManagement: React.FC = () => {
               { value: '', label: 'Select a category' },
               ...categories.map(cat => ({ value: cat._id, label: cat.name }))
             ]}
-            value={formData.categoryId}            onChange={val => {
+            value={formData.categoryId} onChange={val => {
               setFormData((prev: typeof formData) => ({
                 ...prev,
                 categoryId: val,

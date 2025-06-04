@@ -86,14 +86,7 @@ const AnalyticsDashboard: React.FC = () => {
         setTotalExpensesAmount(expenseData.total || 0);
 
         // Fetch low stock products
-        const productsRes = await fetch('/api/products/low-stock', {
-          headers: { 'Authorization': token ? `Bearer ${token}` : '' }
-        });
-
-        if (productsRes.ok) {
-          const productsData = await productsRes.json();
-          setLowStockProducts(productsData);
-        }
+       
       } catch (error) {
         console.error('Error fetching data:', error);
         setError('Failed to load dashboard data. Please try again.');
@@ -663,85 +656,7 @@ const AnalyticsDashboard: React.FC = () => {
         </Card>
       </div>
 
-      <Card>
-        <CardHeader className="flex justify-between items-center">
-          <h2 className="text-lg font-semibold text-gray-800">Inventory Status</h2>
-          <div className="text-sm text-gray-600">
-            {lowStockProducts.length} {lowStockProducts.length === 1 ? 'product' : 'products'} need attention
-          </div>
-        </CardHeader>
-        <CardBody className="p-0">
-          {lowStockProducts.length > 0 ? (
-            <div className="overflow-x-auto">
-              <table className="min-w-full divide-y divide-gray-200">
-                <thead className="bg-gray-50">
-                  <tr>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Product
-                    </th>
-                    <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Current Stock
-                    </th>
-                    <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Reorder Threshold
-                    </th>
-                    <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Status
-                    </th>
-                  </tr>
-                </thead>
-                <tbody className="bg-white divide-y divide-gray-200">
-                  {lowStockProducts.map((product) => {
-                    // Calculate the percentage of stock remaining relative to threshold
-                    const stockPercentage = Math.min(100, (product.stock / product.minStock) * 100);
-                    const criticalThreshold = product.stock <= product.minStock * 0.5;
-
-                    return (
-                      <tr key={product._id} className="hover:bg-gray-50">
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <div className="flex items-center">
-                            <div className="text-sm font-medium text-gray-900">{product.name}</div>
-                          </div>
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-center">
-                          <div className="text-sm text-gray-900 font-semibold">{product.stock}</div>
-                          <div className="w-full bg-gray-200 rounded-full h-2.5 mt-2"></div>
-                          <div
-                            className={`h-2.5 rounded-full ${criticalThreshold ? 'bg-red-600' :
-                              product.stock <= product.minStock ? 'bg-yellow-500' : 'bg-yellow-300'
-                              }`}
-                            style={{ width: `${stockPercentage}%` }}
-                          ></div>
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-center">
-                          <div className="text-sm text-gray-900">{product.minStock}</div>
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-center">
-                          {criticalThreshold ? (
-                            <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-red-100 text-red-800">
-                              Critical - Reorder Now
-                            </span>
-                          ) : product.stock <= product.minStock ? (
-                            <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-yellow-100 text-yellow-800">
-                              Below Threshold
-                            </span>
-                          ) : (
-                            <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-yellow-50 text-yellow-700">
-                              Low Stock
-                            </span>
-                          )}
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          ) : (
-            <div className="py-8 text-center text-gray-500">No low stock products</div>
-          )}
-        </CardBody>
-      </Card>
+      
     </div>
   );
 };
