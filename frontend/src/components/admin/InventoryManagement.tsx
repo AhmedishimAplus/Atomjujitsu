@@ -583,7 +583,7 @@ const InventoryManagement: React.FC = () => {
                             >
                               +
                             </button>
-                          </div>                        )) : (
+                          </div>)) : (
                         <div className="flex items-center justify-center">
                           <span className="min-w-[40px] text-center px-2 py-1 rounded-md bg-gray-100 text-gray-500 font-medium border border-gray-200">N/A</span>
                         </div>
@@ -654,8 +654,7 @@ const InventoryManagement: React.FC = () => {
         </CardBody>
       </Card>
 
-      {/* Product Modal */}
-      <Modal
+      {/* Product Modal */}      <Modal
         isOpen={productModalOpen}
         onClose={() => setProductModalOpen(false)}
         title={editingProduct ? 'Edit Product' : 'Add Product'}
@@ -669,65 +668,6 @@ const InventoryManagement: React.FC = () => {
             onChange={handleInputChange}
             fullWidth
           />
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <Input
-              type="number"
-              label="Staff Price"
-              name="staffPrice"
-              value={formData.staffPrice}
-              onChange={handleInputChange}
-              fullWidth
-              step="0.01"
-              min="0"
-            />
-            <Input
-              type="number"
-              label="Sell Price"
-              name="sellPrice"
-              value={formData.sellPrice}
-              onChange={handleInputChange}
-              fullWidth
-              step="0.01"
-              min="0"
-            />
-          </div>
-          {formData.owner === 'Quarter' && (
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <Input
-                type="number"
-                label="Cost Price"
-                name="costPrice"
-                value={formData.costPrice}
-                onChange={handleInputChange}
-                fullWidth
-                step="0.01"
-                min="0"
-              />
-              <Input
-                type="number"
-                label="Stock"
-                name="stock"
-                value={formData.stock}
-                onChange={handleInputChange}
-                fullWidth
-                min="0"
-              />
-            </div>
-          )}
-          {formData.owner !== 'Quarter' && (
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <Input
-                type="number"
-                label="Stock"
-                name="stock"
-                value={formData.stock}
-                onChange={handleInputChange}
-                fullWidth
-                min="0"
-              />
-            </div>
-          )}
           <Select
             label="Owner"
             options={[
@@ -766,15 +706,64 @@ const InventoryManagement: React.FC = () => {
             fullWidth
             disabled={!formData.categoryId}
             error={formData.categoryId && !formData.subcategory ? 'Please select a subcategory' : undefined}
-          />
-
-          <Input
+          />          <Input
             label="Description"
             name="description"
             value={formData.description}
             onChange={handleInputChange}
             fullWidth
           />
+
+          {/* 2x2 Grid for price inputs */}
+          <div className="grid grid-cols-2 gap-4">
+            <Input
+              label="Staff Price"
+              name="staffPrice"
+              type="number"
+              min="0"
+              step="0.5"
+              value={formData.staffPrice}
+              onChange={handleInputChange}
+              fullWidth
+            />
+
+            <Input
+              label="Sell Price"
+              name="sellPrice"
+              type="number"
+              min="0"
+              step="0.5"
+              value={formData.sellPrice}
+              onChange={handleInputChange}
+              fullWidth
+            />
+
+            {formData.owner === 'Quarter' ? (
+              <Input
+                label="Cost Price"
+                name="costPrice"
+                type="number"
+                min="0"
+                step="0.5"
+                value={formData.costPrice}
+                onChange={handleInputChange}
+                fullWidth
+              />
+            ) : (
+              <div></div> /* Empty div to maintain grid layout when cost price is hidden */
+            )}
+
+            <Input
+              label="Stock"
+              name="stock"
+              type="number"
+              min="0"
+              step="1"
+              value={formData.stock}
+              onChange={handleInputChange}
+              fullWidth
+            />
+          </div>
 
           <div className="flex items-center space-x-2">
             <label htmlFor="isAvailable">Available</label>
