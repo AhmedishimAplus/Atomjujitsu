@@ -5,9 +5,10 @@ import Button from '../ui/Button';
 import Input from '../ui/Input';
 import Modal from '../ui/Modal';
 import { formatDate } from '../../utils/helpers';
-import { User, Droplet, Plus, Minus, Edit, UserPlus, Save } from 'lucide-react';
+import { User, Droplet, Plus, Minus, Edit, UserPlus, Save, RefreshCw } from 'lucide-react';
 import { StaffMember } from '../../types';
 import * as staffApi from '../../services/staffApi';
+import * as api from '../../services/api';
 
 const StaffManagement: React.FC = () => {
   const { state, dispatch } = useAppContext();
@@ -18,45 +19,63 @@ const StaffManagement: React.FC = () => {
   const [editStaffName, setEditStaffName] = useState('');
   const [nameError, setNameError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [staffPurchases, setStaffPurchases] = useState<any[]>([]);
+  const [purchasesByStaff, setPurchasesByStaff] = useState<Record<string, any[]>>({});
+  const [isLoadingPurchases, setIsLoadingPurchases] = useState(false);
 
   // Load staff data from API on component mount
   useEffect(() => {
-    const fetchStaffData = async () => {
-      try {
-        const staffData = await staffApi.getStaffList();
-        // Map the backend data to frontend format
-        const formattedStaff = staffData.map((staff: any) => ({
-          id: staff._id,
-          name: staff.name,
-          waterBottleAllowance: {
-            large: staff.Large_bottles,
-            small: staff.Small_bottles
-          }
-        }));
-        dispatch({ type: 'SET_STAFF_LIST', payload: formattedStaff });
-      } catch (error) {
-        console.error('Failed to fetch staff data:', error);
-      }
-    };
-
     fetchStaffData();
-  }, [dispatch]);
+  }, []);
 
-  // Filter transactions by staff
-  const staffTransactions = state.transactions.filter(
-    transaction => transaction.staffDiscount && transaction.staffName
-  );
+  // Fetch staff purchases from the API
+  useEffect(() => {
+    fetchStaffPurchases();
+  }, []);
 
-  // Group transactions by staff name
-  const transactionsByStaff = staffTransactions.reduce((acc, transaction) => {
-    const staffName = transaction.staffName || 'Unknown';
-    if (!acc[staffName]) {
-      acc[staffName] = [];
+  const fetchStaffData = async () => {
+    try {
+      const staffData = await staffApi.getStaffList();
+      // Map the backend data to frontend format
+      const formattedStaff = staffData.map((staff: any) => ({
+        id: staff._id,
+        name: staff.name,
+        waterBottleAllowance: {
+          large: staff.Large_bottles,
+          small: staff.Small_bottles
+        }
+      }));
+      dispatch({ type: 'SET_STAFF_LIST', payload: formattedStaff });
+    } catch (error) {
+      console.error('Failed to fetch staff data:', error);
     }
-    acc[staffName].push(transaction);
-    return acc;
-  }, {} as Record<string, typeof staffTransactions>);
+  };
 
+  const fetchStaffPurchases = async () => {
+    try {
+      setIsLoadingPurchases(true);
+      const purchases = await api.getStaffPurchases();
+      setStaffPurchases(purchases);
+
+      // Group purchases by staff name
+      const groupedPurchases = purchases.reduce((acc: Record<string, any[]>, purchase: any) => {
+        const staffName = purchase.staffName || 'Unknown';
+        if (!acc[staffName]) {
+          acc[staffName] = [];
+        }
+        acc[staffName].push(purchase);
+        return acc;
+      }, {});
+
+      setPurchasesByStaff(groupedPurchases);
+    } catch (error) {
+      console.error('Failed to fetch staff purchases:', error);
+    } finally {
+      setIsLoadingPurchases(false);
+    }
+  };
+
+  // We now get staff purchases directly from the API instead of using local state
   // Handle water bottle allowance reset
   const handleResetAllowances = async () => {
     try {
@@ -74,13 +93,15 @@ const StaffManagement: React.FC = () => {
       }));
 
       dispatch({ type: 'SET_STAFF_LIST', payload: formattedStaff });
+
+      // Refresh staff purchases
+      await fetchStaffPurchases();
     } catch (error) {
       console.error('Failed to reset allowances:', error);
     } finally {
       setIsLoading(false);
     }
   };
-
   // Handle add staff
   const handleAddStaff = async () => {
     // Validate name
@@ -107,6 +128,9 @@ const StaffManagement: React.FC = () => {
       setNewStaffName('');
       setIsAddModalOpen(false);
       setNameError('');
+
+      // Refresh staff purchases
+      await fetchStaffPurchases();
     } catch (error: any) {
       if (error.response && error.response.data && error.response.data.error) {
         setNameError(error.response.data.error);
@@ -117,7 +141,6 @@ const StaffManagement: React.FC = () => {
       setIsLoading(false);
     }
   };
-
   // Handle update staff
   const handleUpdateStaff = async () => {
     if (!editingStaff) return;
@@ -140,6 +163,9 @@ const StaffManagement: React.FC = () => {
       dispatch({ type: 'UPDATE_STAFF', payload: updatedStaff });
       setIsEditModalOpen(false);
       setNameError('');
+
+      // Refresh staff purchases to reflect name changes
+      await fetchStaffPurchases();
     } catch (error: any) {
       if (error.response && error.response.data && error.response.data.error) {
         setNameError(error.response.data.error);
@@ -178,9 +204,10 @@ const StaffManagement: React.FC = () => {
           };
         }
         return staff;
-      });
+      }); dispatch({ type: 'SET_STAFF_LIST', payload: updatedStaff });
 
-      dispatch({ type: 'SET_STAFF_LIST', payload: updatedStaff });
+      // Refresh staff purchases to update any associated data
+      await fetchStaffPurchases();
     } catch (error) {
       console.error('Failed to update bottle allowance:', error);
     } finally {
@@ -323,23 +350,30 @@ const StaffManagement: React.FC = () => {
 
               <div className="mt-4 pt-4 border-t border-gray-200">
                 <h4 className="text-sm font-medium text-gray-700 mb-2">Recent Purchases</h4>
-                {transactionsByStaff[staff.name]?.slice(0, 3).map((transaction, index) => (
+                {purchasesByStaff[staff.name]?.slice(0, 3).map((purchase, index) => (
                   <div key={index} className="text-sm text-gray-600 mb-1">
-                    {formatDate(transaction.timestamp)} - ${transaction.total.toFixed(2)}
+                    {formatDate(purchase.createdAt)} - ${purchase.total.toFixed(2)}
                   </div>
                 ))}
-                {!transactionsByStaff[staff.name] || transactionsByStaff[staff.name].length === 0 ? (
+                {!purchasesByStaff[staff.name] || purchasesByStaff[staff.name].length === 0 ? (
                   <div className="text-sm text-gray-500 italic">No recent purchases</div>
                 ) : null}
               </div>
             </CardBody>
           </Card>
         ))}
-      </div>
-
-      <Card>
-        <CardHeader>
+      </div>      <Card>
+        <CardHeader className="flex justify-between items-center">
           <h2 className="text-lg font-semibold text-gray-800">Staff Purchase History</h2>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={fetchStaffPurchases}
+            disabled={isLoadingPurchases}
+            leftIcon={<RefreshCw size={16} className={isLoadingPurchases ? "animate-spin" : ""} />}
+          >
+            {isLoadingPurchases ? 'Refreshing...' : 'Refresh'}
+          </Button>
         </CardHeader>
         <CardBody className="p-0">
           <div className="overflow-x-auto">
@@ -361,32 +395,38 @@ const StaffManagement: React.FC = () => {
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
-                {staffTransactions.length === 0 ? (
+                {isLoadingPurchases ? (
+                  <tr>
+                    <td colSpan={4} className="px-6 py-4 text-center text-gray-500">
+                      Loading staff purchases...
+                    </td>
+                  </tr>
+                ) : staffPurchases.length === 0 ? (
                   <tr>
                     <td colSpan={4} className="px-6 py-4 text-center text-gray-500">
                       No staff transactions found
                     </td>
                   </tr>
                 ) : (
-                  staffTransactions
-                    .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
-                    .map((transaction) => (
-                      <tr key={transaction.id} className="hover:bg-gray-50">
+                  staffPurchases
+                    .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+                    .map((purchase) => (
+                      <tr key={purchase._id} className="hover:bg-gray-50">
                         <td className="px-6 py-4 whitespace-nowrap">
-                          <div className="text-sm text-gray-900">{formatDate(transaction.timestamp)}</div>
+                          <div className="text-sm text-gray-900">{formatDate(purchase.createdAt)}</div>
                           <div className="text-xs text-gray-500">
-                            {new Date(transaction.timestamp).toLocaleTimeString()}
+                            {new Date(purchase.createdAt).toLocaleTimeString()}
                           </div>
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap">
-                          <div className="text-sm font-medium text-gray-900">{transaction.staffName}</div>
+                          <div className="text-sm font-medium text-gray-900">{purchase.staffName}</div>
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap">
-                          <div className="text-sm text-gray-500">{transaction.paymentMethod}</div>
+                          <div className="text-sm text-gray-500">{purchase.paymentMethod}</div>
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-right">
                           <div className="text-sm font-medium text-gray-900">
-                            ${transaction.total.toFixed(2)}
+                            ${purchase.total.toFixed(2)}
                           </div>
                         </td>
                       </tr>

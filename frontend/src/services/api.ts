@@ -92,6 +92,14 @@ export const getSales = async (params?: {
   return response.data;
 };
 
+export const getStaffPurchases = async (params?: {
+  startDate?: string;
+  endDate?: string;
+}) => {
+  const response = await api.get('/sales/staff-purchases', { params });
+  return response.data;
+};
+
 export const getSalesHistoryWithCost = async (params?: {
   startDate?: string;
   endDate?: string;

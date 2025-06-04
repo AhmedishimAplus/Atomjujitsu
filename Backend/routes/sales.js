@@ -208,7 +208,6 @@ router.post('/', [
 
 
 
-
 // Get sales by product for the current month (for analytics)
 router.get('/product-analytics/month', auth, async (req, res) => {
     try {
@@ -1155,6 +1154,54 @@ router.get('/profit/:period', auth, async (req, res) => {
                 end: endDate
             }
         });
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// Get staff purchases
+router.get('/staff-purchases', auth, async (req, res) => {
+    try {
+        const { startDate, endDate } = req.query;
+        let query = { staffDiscount: true, staffName: { $exists: true, $ne: null } };
+
+        // Apply date filter if provided
+        if (startDate && endDate) {
+            const start = new Date(startDate);
+            start.setHours(0, 0, 0, 0);
+            const end = new Date(endDate);
+            end.setHours(23, 59, 59, 999);
+
+            query.createdAt = { $gte: start, $lte: end };
+        }
+
+        // Get all staff purchases sorted by most recent first
+        const staffPurchases = await Sale.find(query)
+            .sort({ createdAt: -1 })
+            .populate('staffId', 'name Large_bottles Small_bottles')
+            .populate('createdBy', 'name email');
+
+        // Transform data for frontend consumption
+        const formattedPurchases = staffPurchases.map(purchase => {
+            const { _id, staffName, paymentMethod, total, createdAt, items, staffId } = purchase;
+
+            return {
+                _id,
+                staffName,
+                paymentMethod,
+                total,
+                createdAt,
+                items,
+                staffId: staffId ? staffId._id : null,
+                staffDetails: staffId ? {
+                    name: staffId.name,
+                    largeBottles: staffId.Large_bottles,
+                    smallBottles: staffId.Small_bottles
+                } : null
+            };
+        });
+
+        res.json(formattedPurchases);
     } catch (error) {
         res.status(500).json({ error: error.message });
     }
