@@ -5,32 +5,41 @@ import Button from '../ui/Button';
 import Input from '../ui/Input';
 import Toggle from '../ui/Toggle';
 import Modal from '../ui/Modal';
+import Select from '../ui/Select';
 import { ProductItem } from '../../types';
 import { formatCurrency } from '../../utils/helpers';
 import { Trash2, Check, X, DollarSign, CreditCard, ChevronUp, ChevronDown } from 'lucide-react';
 import { getProducts, getCategories, createSale } from '../../services/api';
+import * as staffApi from '../../services/staffApi';
 import qrCodeImg from '../../assets/instapay.jpeg';
 
 const CashierInterface: React.FC = () => {
   const { state, dispatch } = useAppContext();
   const [searchTerm, setSearchTerm] = useState('');
   const [paymentModalOpen, setPaymentModalOpen] = useState(false);
-  const [receiptModalOpen, setReceiptModalOpen] = useState(false);
-  const [paymentMethod, setPaymentMethod] = useState<'InstaPay' | 'Cash'>('Cash');
+  const [receiptModalOpen, setReceiptModalOpen] = useState(false); const [paymentMethod, setPaymentMethod] = useState<'InstaPay' | 'Cash'>('Cash');
   const [staffName, setStaffName] = useState('');
   const [products, setProducts] = useState<ProductItem[]>([]);
   const [categories, setCategories] = useState<any[]>([]);
-
-  // Fetch products and categories on component mount
+  const [staffList, setStaffList] = useState<{ id: string; name: string }[]>([]);
+  // Fetch products, categories, and staff on component mount
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const [productsData, categoriesData] = await Promise.all([
+        const [productsData, categoriesData, staffData] = await Promise.all([
           getProducts(),
-          getCategories()
+          getCategories(),
+          staffApi.getStaffList()
         ]);
         setProducts(productsData.filter((p: ProductItem) => p.isAvailable));
         setCategories(categoriesData);
+
+        // Format staff data for dropdown
+        const formattedStaffList = staffData.map((staff: any) => ({
+          id: staff._id,
+          name: staff.name
+        }));
+        setStaffList(formattedStaffList);
       } catch (error) {
         console.error('Error fetching data:', error);
       }
@@ -115,9 +124,13 @@ const CashierInterface: React.FC = () => {
       }
     });
   };
-
   // Handle staff discount toggle
   const handleStaffDiscountToggle = (enabled: boolean) => {
+    if (!enabled) {
+      // Reset staff name when disabling discount
+      setStaffName('');
+    }
+
     dispatch({
       type: 'SET_STAFF_DISCOUNT',
       payload: {
@@ -126,16 +139,15 @@ const CashierInterface: React.FC = () => {
       }
     });
   };
-
   // Handle staff name change
-  const handleStaffNameChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setStaffName(e.target.value);
+  const handleStaffNameChange = (value: string) => {
+    setStaffName(value);
     if (state.currentOrder.staffDiscount) {
       dispatch({
         type: 'SET_STAFF_DISCOUNT',
         payload: {
           enabled: true,
-          staffName: e.target.value
+          staffName: value
         }
       });
     }
@@ -179,7 +191,6 @@ const CashierInterface: React.FC = () => {
       alert(e?.response?.data?.error || 'Payment failed');
     }
   };
-
   // Handle closing receipt and resetting
   const handleCloseReceipt = () => {
     setReceiptModalOpen(false);
@@ -328,22 +339,25 @@ const CashierInterface: React.FC = () => {
                 <p className="font-semibold text-lg">
                   {formatCurrency(state.currentOrder.total)}
                 </p>
-              </div>
-
-              {state.currentOrder.staffDiscount && (
-                <Input
-                  placeholder="Staff Name"
+              </div>              {state.currentOrder.staffDiscount && (
+                <Select
+                  options={[
+                    { value: '', label: '-- Select Staff --' },
+                    ...staffList.map(staff => ({ value: staff.name, label: staff.name }))
+                  ]}
+                  label="Staff Name"
                   value={staffName}
                   onChange={handleStaffNameChange}
                   fullWidth
                 />
-              )}
-
-              <div className="flex space-x-2">
+              )}              <div className="flex space-x-2">
                 <Button
                   variant="outline"
                   fullWidth
-                  onClick={() => dispatch({ type: 'RESET_ORDER' })}
+                  onClick={() => {
+                    dispatch({ type: 'RESET_ORDER' });
+                    setStaffName('');
+                  }}
                 >
                   Cancel
                 </Button>
