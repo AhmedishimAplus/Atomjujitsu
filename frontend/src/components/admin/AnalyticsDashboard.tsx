@@ -65,7 +65,7 @@ const AnalyticsDashboard: React.FC = () => {
           if (profitRes.ok) {
             // We get the profit for reference, but we'll always calculate it ourselves
             const profitData = await profitRes.json();
-            console.log('Backend profit calculation:', profitData.totalProfit);
+           
           }
         } catch (profitError) {
           console.error('Error fetching profit data:', profitError);

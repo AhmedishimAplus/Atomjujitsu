@@ -27,6 +27,10 @@ type AppAction =
   | { type: 'UPDATE_PRODUCT'; payload: ProductItem }
   | { type: 'REMOVE_PRODUCT'; payload: string }
   | { type: 'ADD_EXPENSE'; payload: Expense }
+  | { type: 'ADD_STAFF'; payload: StaffMember }
+  | { type: 'UPDATE_STAFF'; payload: StaffMember }
+  | { type: 'DELETE_STAFF'; payload: string }
+  | { type: 'SET_STAFF_LIST'; payload: StaffMember[] }
   | { type: 'UPDATE_WATER_BOTTLE_ALLOWANCE'; payload: { staffId: string; type: 'large' | 'small'; newAmount: number } }
   | { type: 'RESET_ALLOWANCES' };
 
@@ -292,9 +296,7 @@ function appReducer(state: AppState, action: AppAction): AppState {
       return {
         ...state,
         inventory: [...state.inventory, action.payload]
-      };
-
-    // Update product in inventory
+      };    // Update product in inventory
     case 'UPDATE_PRODUCT': {
       return {
         ...state,
@@ -305,12 +307,80 @@ function appReducer(state: AppState, action: AppAction): AppState {
     }
 
     // Remove product from inventory
-    // case 'DELETE_PRODUCT': {
-    //   return {
-    //     ...state,
-    //     inventory: state.inventory.filter(product => product._id !== action.payload)
-    //   };
-    // }
+    case 'REMOVE_PRODUCT': {
+      return {
+        ...state,
+        inventory: state.inventory.filter(product => product._id !== action.payload)
+      };
+    }
+
+    // Add staff member
+    case 'ADD_STAFF': {
+      return {
+        ...state,
+        staffMembers: [...state.staffMembers, action.payload]
+      };
+    }
+
+    // Update staff member
+    case 'UPDATE_STAFF': {
+      return {
+        ...state,
+        staffMembers: state.staffMembers.map(staff =>
+          staff.id === action.payload.id ? action.payload : staff
+        )
+      };
+    }
+
+    // Delete staff member
+    case 'DELETE_STAFF': {
+      return {
+        ...state,
+        staffMembers: state.staffMembers.filter(staff => staff.id !== action.payload)
+      };
+    }
+
+    // Set staff list
+    case 'SET_STAFF_LIST': {
+      return {
+        ...state,
+        staffMembers: action.payload
+      };
+    }
+
+    // Update water bottle allowance
+    case 'UPDATE_WATER_BOTTLE_ALLOWANCE': {
+      const { staffId, type, newAmount } = action.payload;
+      return {
+        ...state,
+        staffMembers: state.staffMembers.map(staff => {
+          if (staff.id === staffId) {
+            return {
+              ...staff,
+              waterBottleAllowance: {
+                ...staff.waterBottleAllowance,
+                [type]: Math.max(0, Math.min(2, newAmount)) // Ensure value is between 0 and 2
+              }
+            };
+          }
+          return staff;
+        })
+      };
+    }
+
+    // Reset all water bottle allowances
+    case 'RESET_ALLOWANCES': {
+      return {
+        ...state,
+        staffMembers: state.staffMembers.map(staff => ({
+          ...staff,
+          waterBottleAllowance: {
+            large: 2,
+            small: 2
+          }
+        }))
+      };
+    }
 
     default:
       return state;
