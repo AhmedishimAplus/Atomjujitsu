@@ -1,10 +1,10 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useAppContext } from '../../context/AppContext';
 import { Card, CardHeader, CardBody } from '../ui/Card';
 import Button from '../ui/Button';
 import Select from '../ui/Select';
-import { formatCurrency, getWeekDates, getMonthDates } from '../../utils/helpers';
-import { BarChart3, TrendingUp, Download, ShoppingBag, DollarSign, Package, RefreshCw } from 'lucide-react';
+import { formatCurrency, getWeekDates, getMonthDates, groupDataByWeeks } from '../../utils/helpers';
+import { TrendingUp, Download, ShoppingBag, DollarSign, RefreshCw } from 'lucide-react';
 
 interface Product {
   _id: string;
@@ -18,18 +18,20 @@ const AnalyticsDashboard: React.FC = () => {
   const [reportType, setReportType] = useState<string>('weekly');
   const [salesData, setSalesData] = useState<{ label: string; value: number }[]>([]);
   const [expensesData, setExpensesData] = useState<{ label: string; value: number }[]>([]);
-  const [topProducts, setTopProducts] = useState<{ name: string; quantity: number; revenue: number }[]>([]); const [totalSalesAmount, setTotalSalesAmount] = useState<number>(0);
+  const [topProducts, setTopProducts] = useState<{ name: string; quantity: number; revenue: number }[]>([]);
+  const [topProductsByQuantity, setTopProductsByQuantity] = useState<{ name: string; quantity: number; revenue: number }[]>([]);
+  const [totalSalesAmount, setTotalSalesAmount] = useState<number>(0);
   const [totalExpensesAmount, setTotalExpensesAmount] = useState<number>(0);
   const [totalProfit, setTotalProfit] = useState<number>(0);
   const [totalTransactionsCount, setTotalTransactionsCount] = useState<number>(0);
-  const [lowStockProducts, setLowStockProducts] = useState<Product[]>([]);
-  const [isLoading, setIsLoading] = useState<boolean>(true);
+  const [lowStockProducts, setLowStockProducts] = useState<Product[]>([]);  const [isLoading, setIsLoading] = useState<boolean>(true);
+  const [isChangingReportType, setIsChangingReportType] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
   const [lastUpdated, setLastUpdated] = useState<Date>(new Date());
 
-  // Calculate date ranges
-  const weekDates = getWeekDates();
-  const monthDates = getMonthDates();
+  // Memoize date ranges to prevent flickering
+  const weekDates = useMemo(() => getWeekDates(), []);
+  const monthDates = useMemo(() => getMonthDates(), []);
 
   // Fetch backend data
   useEffect(() => {
@@ -53,28 +55,22 @@ const AnalyticsDashboard: React.FC = () => {
 
         const salesData = await salesRes.json();
         setTotalSalesAmount(salesData.totalSales || 0);
-        setTotalTransactionsCount(salesData.totalCount || 0);
+        setTotalTransactionsCount(salesData.totalCount || 0);        // Fetch profit data for reference, but we'll always calculate it ourselves
+        try {
+          const profitEndpoint = `/api/sales/profit/${reportType === 'weekly' ? 'week' : 'month'}`;
+          const profitRes = await fetch(profitEndpoint, {
+            headers: { 'Authorization': token ? `Bearer ${token}` : '' }
+          });
 
-        // If backend provides totalProfit, use it directly instead of calculating it
-        if (salesData.totalProfit !== undefined) {
-          setTotalProfit(salesData.totalProfit);
-        } else {
-          // If the original endpoint doesn't return profit, fetch from dedicated endpoint
-          try {
-            const profitEndpoint = `/api/sales/profit/${reportType === 'weekly' ? 'week' : 'month'}`;
-            const profitRes = await fetch(profitEndpoint, {
-              headers: { 'Authorization': token ? `Bearer ${token}` : '' }
-            });
-
-            if (profitRes.ok) {
-              const profitData = await profitRes.json();
-              setTotalProfit(profitData.totalProfit || 0);
-            }
-          } catch (profitError) {
-            console.error('Error fetching profit data:', profitError);
-            // Fall back to the difference between sales and expenses
+          if (profitRes.ok) {
+            // We get the profit for reference, but we'll always calculate it ourselves
+            const profitData = await profitRes.json();
+            console.log('Backend profit calculation:', profitData.totalProfit);
           }
+        } catch (profitError) {
+          console.error('Error fetching profit data:', profitError);
         }
+        // We'll set the profit in the dedicated useEffect that calculates totalSalesAmount - totalExpensesAmount
 
         // Fetch expenses total
         const expenseEndpoint = reportType === 'weekly' ? '/api/expenses/current-week-total' : '/api/expenses/current-month-total';
@@ -97,12 +93,12 @@ const AnalyticsDashboard: React.FC = () => {
         if (productsRes.ok) {
           const productsData = await productsRes.json();
           setLowStockProducts(productsData);
-        }
-      } catch (error) {
+        }      } catch (error) {
         console.error('Error fetching data:', error);
         setError('Failed to load dashboard data. Please try again.');
       } finally {
         setIsLoading(false);
+        setIsChangingReportType(false);
       }
     };
 
@@ -171,22 +167,26 @@ const AnalyticsDashboard: React.FC = () => {
               expensesByDay[date] = item.total || 0;
             });
           }
+        }        // Format data for charts
+        const rawSalesData = Object.entries(salesByDay).map(([date, value]) => ({
+          label: date.substring(5), // MM-DD format
+          value
+        }));
+
+        const rawExpensesData = Object.entries(expensesByDay).map(([date, value]) => ({
+          label: date.substring(5), // MM-DD format
+          value
+        }));
+
+        // For weekly data, use as is; for monthly data, group by weeks
+        if (reportType === 'weekly') {
+          setSalesData(rawSalesData);
+          setExpensesData(rawExpensesData);
+        } else {
+          // Group by weeks for monthly view
+          setSalesData(groupDataByWeeks(rawSalesData, monthDates.start));
+          setExpensesData(groupDataByWeeks(rawExpensesData, monthDates.start));
         }
-
-        // Format data for charts
-        setSalesData(
-          Object.entries(salesByDay).map(([date, value]) => ({
-            label: date.substring(5), // MM-DD format
-            value
-          }))
-        );
-
-        setExpensesData(
-          Object.entries(expensesByDay).map(([date, value]) => ({
-            label: date.substring(5), // MM-DD format
-            value
-          }))
-        );
 
         // Fetch top products
         const topProductsEndpoint = reportType === 'weekly' ?
@@ -197,20 +197,30 @@ const AnalyticsDashboard: React.FC = () => {
         });
 
         if (topProductsRes.ok) {
-          const topProductsData = await topProductsRes.json();
-
-          // Filter out Sharoofa products
+          const topProductsData = await topProductsRes.json();          // Filter out Sharoofa products
           if (Array.isArray(topProductsData)) {
             const filteredProducts = topProductsData.filter((product: any) =>
               product.owner !== 'Sharoofa'
             );
 
+            // Set top products by revenue
             setTopProducts(
               filteredProducts.map((product: any) => ({
                 name: product.name,
                 quantity: product.quantity,
                 revenue: product.revenue
               })).slice(0, 5)
+            );
+
+            // Set top products by quantity
+            setTopProductsByQuantity(
+              [...filteredProducts]
+                .sort((a, b) => b.quantity - a.quantity)
+                .map((product: any) => ({
+                  name: product.name,
+                  quantity: product.quantity,
+                  revenue: product.revenue
+                })).slice(0, 5)
             );
           } else {
             setTopProducts([]);
@@ -221,24 +231,22 @@ const AnalyticsDashboard: React.FC = () => {
         // Don't overwrite main error if it's already set
         if (!error) {
           setError('Failed to load chart data. Please try again.');
-        }
-      } finally {
+        }      } finally {
         // Always update the timestamp when data is refreshed
         setLastUpdated(new Date());
+        setIsChangingReportType(false);
       }
     };
 
     fetchChartData();
-  }, [reportType, weekDates, monthDates]);
-  // Note: totalProfit is now directly set from the API response
-  // We can fall back to calculation if API doesn't provide it
+  }, [reportType, weekDates, monthDates]);  // Calculate total profit as sales minus expenses
   useEffect(() => {
-    if (totalProfit === 0) {
-      setTotalProfit(totalSalesAmount - totalExpensesAmount);
-    }
-  }, [totalSalesAmount, totalExpensesAmount, totalProfit]);
-  // Handle refreshing data
+    // Always calculate profit locally to ensure it's sales minus expenses
+    setTotalProfit(totalSalesAmount - totalExpensesAmount);
+  }, [totalSalesAmount, totalExpensesAmount]);  // Handle refreshing data
   const handleRefresh = () => {
+    if (isChangingReportType) return; // Prevent refresh during report type change
+    
     // Show loading state
     setIsLoading(true);
 
@@ -350,12 +358,19 @@ const AnalyticsDashboard: React.FC = () => {
           <Select
             options={[
               { value: 'weekly', label: 'Weekly Report' },
-              { value: 'monthly', label: 'Monthly Report' }
-            ]}
+              { value: 'monthly', label: 'Monthly Report' }            ]}
             value={reportType}
-            onChange={setReportType}
+            onChange={(value) => {
+              if (value !== reportType && !isChangingReportType) {
+                setIsChangingReportType(true);
+                // Small delay to ensure we don't get rapid toggling
+                setTimeout(() => {
+                  setReportType(value);
+                }, 50);
+              }
+            }}
             className="w-48"
-            disabled={isLoading}
+            disabled={isLoading || isChangingReportType}
           />
           <Button
             variant="outline"
@@ -454,86 +469,81 @@ const AnalyticsDashboard: React.FC = () => {
         </Card>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <Card>
-          <CardHeader>
-            <h2 className="text-lg font-semibold text-gray-800">
-              {reportType === 'weekly' ? 'Weekly' : 'Monthly'} Sales
-            </h2>
-          </CardHeader>
-          <CardBody className="p-4">
-            <div className="h-64">
-              {salesData.length > 0 ? (
-                <div className="h-full flex items-end space-x-2">
-                  {salesData.map((item, index) => {
-                    const maxValue = Math.max(...salesData.map(d => d.value), 1); // Ensure we don't divide by zero
-                    const height = maxValue > 0 ? (item.value / maxValue) * 100 : 0;
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">        <Card>
+        <CardHeader>
+          <h2 className="text-lg font-semibold text-gray-800">
+            {reportType === 'weekly' ? 'Weekly Sales' : 'Monthly Sales (By Week)'}
+          </h2>
+        </CardHeader>
+        <CardBody className="p-4">
+          <div className="h-64">
+            {salesData.length > 0 ? (<div className="h-full flex items-end space-x-2">
+              {salesData.map((item, index) => {
+                const maxValue = Math.max(...salesData.map(d => d.value), 1); // Ensure we don't divide by zero
+                const heightPercentage = maxValue > 0 ? (item.value / maxValue) * 100 : 0;
 
-                    return (
-                      <div key={index} className="flex flex-col items-center flex-1">
-                        <div className="flex flex-col items-center w-full">
-                          <span className="text-xs text-gray-600 mb-1">
-                            {formatCurrency(item.value)}
-                          </span>
-                          <div
-                            className="w-full bg-blue-500 rounded-t transition-all duration-500 ease-in-out"
-                            style={{
-                              height: `${Math.max(height, 5)}%`,
-                              minHeight: '8px'
-                            }}
-                          ></div>
-                          <div className="text-xs mt-2 text-gray-600 whitespace-nowrap overflow-hidden text-ellipsis max-w-full">
-                            {item.label}
-                          </div>
-                        </div>
+                return (
+                  <div key={index} className="flex flex-col items-center flex-1">
+                    <div className="flex flex-col items-center w-full">
+                      <span className="text-xs text-gray-600 mb-1">
+                        {formatCurrency(item.value)}
+                      </span>
+                      <div
+                        className="w-full bg-blue-500 rounded-t transition-all duration-500 ease-in-out"
+                        style={{
+                          height: `${Math.max(heightPercentage, 2)}%`, // Ensure a minimum height for visibility
+                          minHeight: item.value > 0 ? '8px' : '0' // Only show bars for non-zero values
+                        }}
+                      ></div>
+                      <div className="text-xs mt-2 text-gray-600 whitespace-nowrap overflow-hidden text-ellipsis max-w-full">
+                        {item.label}
                       </div>
-                    );
-                  })}
-                </div>
-              ) : (
-                <div className="h-full flex items-center justify-center text-gray-500">
-                  No data available
-                </div>
-              )}
+                    </div>
+                  </div>
+                );
+              })}
             </div>
-          </CardBody>
-        </Card>
-
-        <Card>
+            ) : (
+              <div className="h-full flex items-center justify-center text-gray-500">
+                No data available
+              </div>
+            )}
+          </div>
+        </CardBody>
+      </Card>        <Card>
           <CardHeader>
             <h2 className="text-lg font-semibold text-gray-800">
-              {reportType === 'weekly' ? 'Weekly' : 'Monthly'} Expenses
+              {reportType === 'weekly' ? 'Weekly Expenses' : 'Monthly Expenses (By Week)'}
             </h2>
           </CardHeader>
           <CardBody className="p-4">
             <div className="h-64">
-              {expensesData.length > 0 ? (
-                <div className="h-full flex items-end space-x-2">
-                  {expensesData.map((item, index) => {
-                    const maxValue = Math.max(...expensesData.map(d => d.value), 1); // Ensure we don't divide by zero
-                    const height = maxValue > 0 ? (item.value / maxValue) * 100 : 0;
+              {expensesData.length > 0 ? (<div className="h-full flex items-end space-x-2">
+                {expensesData.map((item, index) => {
+                  const maxValue = Math.max(...expensesData.map(d => d.value), 1); // Ensure we don't divide by zero
+                  const heightPercentage = maxValue > 0 ? (item.value / maxValue) * 100 : 0;
 
-                    return (
-                      <div key={index} className="flex flex-col items-center flex-1">
-                        <div className="flex flex-col items-center w-full">
-                          <span className="text-xs text-gray-600 mb-1">
-                            {formatCurrency(item.value)}
-                          </span>
-                          <div
-                            className="w-full bg-red-500 rounded-t transition-all duration-500 ease-in-out"
-                            style={{
-                              height: `${Math.max(height, 5)}%`,
-                              minHeight: '8px'
-                            }}
-                          ></div>
-                          <div className="text-xs mt-2 text-gray-600 whitespace-nowrap overflow-hidden text-ellipsis max-w-full">
-                            {item.label}
-                          </div>
+                  return (
+                    <div key={index} className="flex flex-col items-center flex-1">
+                      <div className="flex flex-col items-center w-full">
+                        <span className="text-xs text-gray-600 mb-1">
+                          {formatCurrency(item.value)}
+                        </span>
+                        <div
+                          className="w-full bg-red-500 rounded-t transition-all duration-500 ease-in-out"
+                          style={{
+                            height: `${Math.max(heightPercentage, 2)}%`, // Ensure a minimum height for visibility
+                            minHeight: item.value > 0 ? '8px' : '0' // Only show bars for non-zero values
+                          }}
+                        ></div>
+                        <div className="text-xs mt-2 text-gray-600 whitespace-nowrap overflow-hidden text-ellipsis max-w-full">
+                          {item.label}
                         </div>
                       </div>
-                    );
-                  })}
-                </div>
+                    </div>
+                  );
+                })}
+              </div>
               ) : (
                 <div className="h-full flex items-center justify-center text-gray-500">
                   No data available
@@ -610,7 +620,7 @@ const AnalyticsDashboard: React.FC = () => {
 
         <Card>
           <CardHeader>
-            <h2 className="text-lg font-semibold text-gray-800">Top Products</h2>
+            <h2 className="text-lg font-semibold text-gray-800">Top Products by Revenue</h2>
           </CardHeader>
           <CardBody className="p-0">
             {topProducts.length > 0 ? (
@@ -645,6 +655,57 @@ const AnalyticsDashboard: React.FC = () => {
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-right">
                           <div className="text-sm font-medium text-gray-900">
+                            {formatCurrency(product.revenue)}
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            ) : (
+              <div className="py-8 text-center text-gray-500">No data available</div>
+            )}
+          </CardBody>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <h2 className="text-lg font-semibold text-gray-800">Top Products by Quantity</h2>
+          </CardHeader>
+          <CardBody className="p-0">
+            {topProductsByQuantity.length > 0 ? (
+              <div className="overflow-x-auto">
+                <table className="min-w-full divide-y divide-gray-200">
+                  <thead className="bg-gray-50">
+                    <tr>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Product
+                      </th>
+                      <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Quantity Sold
+                      </th>
+                      <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Revenue
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody className="bg-white divide-y divide-gray-200">
+                    {topProductsByQuantity.map((product, index) => (
+                      <tr key={index} className={`hover:bg-gray-50 ${index < 3 ? 'bg-purple-50' : ''}`}>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div className="flex items-center">
+                            <div className={`text-gray-900 font-${index < 3 ? 'medium' : 'normal'}`}>
+                              {index < 3 && <span className="inline-flex items-center justify-center w-5 h-5 mr-2 rounded-full bg-purple-100 text-purple-800 text-xs font-bold">{index + 1}</span>}
+                              {product.name}
+                            </div>
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-right">
+                          <div className="text-sm font-semibold text-gray-900">{product.quantity}</div>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-right">
+                          <div className="text-sm text-gray-900">
                             {formatCurrency(product.revenue)}
                           </div>
                         </td>
@@ -702,14 +763,13 @@ const AnalyticsDashboard: React.FC = () => {
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-center">
                           <div className="text-sm text-gray-900 font-semibold">{product.stock}</div>
-                          <div className="w-full bg-gray-200 rounded-full h-2.5 mt-2">
+                          <div className="w-full bg-gray-200 rounded-full h-2.5 mt-2"></div>
                             <div
                               className={`h-2.5 rounded-full ${criticalThreshold ? 'bg-red-600' :
-                                  product.stock <= product.minStock ? 'bg-yellow-500' : 'bg-yellow-300'
+                                product.stock <= product.minStock ? 'bg-yellow-500' : 'bg-yellow-300'
                                 }`}
                               style={{ width: `${stockPercentage}%` }}
                             ></div>
-                          </div>
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-center">
                           <div className="text-sm text-gray-900">{product.minStock}</div>
