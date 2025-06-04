@@ -24,7 +24,7 @@ const AnalyticsDashboard: React.FC = () => {
   const [totalExpensesAmount, setTotalExpensesAmount] = useState<number>(0);
   const [totalProfit, setTotalProfit] = useState<number>(0);
   const [totalTransactionsCount, setTotalTransactionsCount] = useState<number>(0);
-  const [lowStockProducts, setLowStockProducts] = useState<Product[]>([]);  const [isLoading, setIsLoading] = useState<boolean>(true);
+  const [lowStockProducts, setLowStockProducts] = useState<Product[]>([]); const [isLoading, setIsLoading] = useState<boolean>(true);
   const [isChangingReportType, setIsChangingReportType] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
   const [lastUpdated, setLastUpdated] = useState<Date>(new Date());
@@ -93,7 +93,8 @@ const AnalyticsDashboard: React.FC = () => {
         if (productsRes.ok) {
           const productsData = await productsRes.json();
           setLowStockProducts(productsData);
-        }      } catch (error) {
+        }
+      } catch (error) {
         console.error('Error fetching data:', error);
         setError('Failed to load dashboard data. Please try again.');
       } finally {
@@ -231,7 +232,8 @@ const AnalyticsDashboard: React.FC = () => {
         // Don't overwrite main error if it's already set
         if (!error) {
           setError('Failed to load chart data. Please try again.');
-        }      } finally {
+        }
+      } finally {
         // Always update the timestamp when data is refreshed
         setLastUpdated(new Date());
         setIsChangingReportType(false);
@@ -246,7 +248,7 @@ const AnalyticsDashboard: React.FC = () => {
   }, [totalSalesAmount, totalExpensesAmount]);  // Handle refreshing data
   const handleRefresh = () => {
     if (isChangingReportType) return; // Prevent refresh during report type change
-    
+
     // Show loading state
     setIsLoading(true);
 
@@ -358,7 +360,7 @@ const AnalyticsDashboard: React.FC = () => {
           <Select
             options={[
               { value: 'weekly', label: 'Weekly Report' },
-              { value: 'monthly', label: 'Monthly Report' }            ]}
+              { value: 'monthly', label: 'Monthly Report' }]}
             value={reportType}
             onChange={(value) => {
               if (value !== reportType && !isChangingReportType) {
@@ -475,27 +477,71 @@ const AnalyticsDashboard: React.FC = () => {
             {reportType === 'weekly' ? 'Weekly Sales' : 'Monthly Sales (By Week)'}
           </h2>
         </CardHeader>
-        <CardBody className="p-4">
-          <div className="h-64">
-            {salesData.length > 0 ? (<div className="h-full flex items-end space-x-2">
-              {salesData.map((item, index) => {
-                const maxValue = Math.max(...salesData.map(d => d.value), 1); // Ensure we don't divide by zero
-                const heightPercentage = maxValue > 0 ? (item.value / maxValue) * 100 : 0;
+        <CardBody className="p-4">          <div className="h-64">
+          {salesData.length > 0 ? (<div className="h-full flex items-end justify-between px-1">
+            {salesData.map((item, index) => {
+              const maxValue = Math.max(...salesData.map(d => d.value), 1); // Avoid divide by zero
+              // Calculate the exact percentage for consistent visual scaling
+              const heightPercentage = (item.value / maxValue) * 85; // Use 85% of height as max to leave room for labels
 
-                return (
-                  <div key={index} className="flex flex-col items-center flex-1">
-                    <div className="flex flex-col items-center w-full">
-                      <span className="text-xs text-gray-600 mb-1">
-                        {formatCurrency(item.value)}
-                      </span>
+              return (
+                <div key={index} className="flex flex-col items-center w-[14%] h-full">
+                  <div className="flex flex-col items-center w-full h-full relative">
+                    <span className="text-xs text-gray-600 mb-1 absolute -top-6">
+                      {formatCurrency(item.value)}
+                    </span>
+                    <div className="h-[85%] w-full flex items-end justify-center">
                       <div
-                        className="w-full bg-blue-500 rounded-t transition-all duration-500 ease-in-out"
+                        className="w-[80%] bg-blue-500 rounded-t-md transition-all duration-500 ease-in-out"
                         style={{
-                          height: `${Math.max(heightPercentage, 2)}%`, // Ensure a minimum height for visibility
-                          minHeight: item.value > 0 ? '8px' : '0' // Only show bars for non-zero values
+                          height: item.value > 0 ? `${Math.max(heightPercentage, 2)}%` : '0',
+                          minHeight: item.value > 0 ? '4px' : '0'
                         }}
                       ></div>
-                      <div className="text-xs mt-2 text-gray-600 whitespace-nowrap overflow-hidden text-ellipsis max-w-full">
+                    </div>
+                    <div className="text-xs mt-2 text-gray-600 whitespace-nowrap overflow-hidden text-ellipsis w-full text-center absolute bottom-0">
+                      {item.label}
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+          ) : (
+            <div className="h-full flex items-center justify-center text-gray-500">
+              No data available
+            </div>
+          )}
+        </div>
+        </CardBody>
+      </Card>        <Card>
+          <CardHeader>
+            <h2 className="text-lg font-semibold text-gray-800">
+              {reportType === 'weekly' ? 'Weekly Expenses' : 'Monthly Expenses (By Week)'}
+            </h2>
+          </CardHeader>
+          <CardBody className="p-4">            <div className="h-64">
+            {expensesData.length > 0 ? (<div className="h-full flex items-end justify-between px-1">
+              {expensesData.map((item, index) => {
+                const maxValue = Math.max(...expensesData.map(d => d.value), 1);
+                const heightPercentage = (item.value / maxValue) * 85; // Use 85% of height as max
+
+                return (
+                  <div key={index} className="flex flex-col items-center w-[14%] h-full">
+                    <div className="flex flex-col items-center w-full h-full relative">
+                      <span className="text-xs text-gray-600 mb-1 absolute -top-6">
+                        {formatCurrency(item.value)}
+                      </span>
+                      <div className="h-[85%] w-full flex items-end justify-center">
+                        <div
+                          className="w-[80%] bg-red-500 rounded-t-md transition-all duration-500 ease-in-out"
+                          style={{
+                            height: item.value > 0 ? `${Math.max(heightPercentage, 2)}%` : '0',
+                            minHeight: item.value > 0 ? '4px' : '0'
+                          }}
+                        ></div>
+                      </div>
+                      <div className="text-xs mt-2 text-gray-600 whitespace-nowrap overflow-hidden text-ellipsis w-full text-center absolute bottom-0">
                         {item.label}
                       </div>
                     </div>
@@ -509,114 +555,10 @@ const AnalyticsDashboard: React.FC = () => {
               </div>
             )}
           </div>
-        </CardBody>
-      </Card>        <Card>
-          <CardHeader>
-            <h2 className="text-lg font-semibold text-gray-800">
-              {reportType === 'weekly' ? 'Weekly Expenses' : 'Monthly Expenses (By Week)'}
-            </h2>
-          </CardHeader>
-          <CardBody className="p-4">
-            <div className="h-64">
-              {expensesData.length > 0 ? (<div className="h-full flex items-end space-x-2">
-                {expensesData.map((item, index) => {
-                  const maxValue = Math.max(...expensesData.map(d => d.value), 1); // Ensure we don't divide by zero
-                  const heightPercentage = maxValue > 0 ? (item.value / maxValue) * 100 : 0;
-
-                  return (
-                    <div key={index} className="flex flex-col items-center flex-1">
-                      <div className="flex flex-col items-center w-full">
-                        <span className="text-xs text-gray-600 mb-1">
-                          {formatCurrency(item.value)}
-                        </span>
-                        <div
-                          className="w-full bg-red-500 rounded-t transition-all duration-500 ease-in-out"
-                          style={{
-                            height: `${Math.max(heightPercentage, 2)}%`, // Ensure a minimum height for visibility
-                            minHeight: item.value > 0 ? '8px' : '0' // Only show bars for non-zero values
-                          }}
-                        ></div>
-                        <div className="text-xs mt-2 text-gray-600 whitespace-nowrap overflow-hidden text-ellipsis max-w-full">
-                          {item.label}
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-              ) : (
-                <div className="h-full flex items-center justify-center text-gray-500">
-                  No data available
-                </div>
-              )}
-            </div>
           </CardBody>
         </Card>
 
-        <Card>
-          <CardHeader>
-            <h2 className="text-lg font-semibold text-gray-800">Sales vs Expenses</h2>
-          </CardHeader>
-          <CardBody className="p-4">
-            <div className="h-64 flex flex-col justify-center">
-              <div className="w-full bg-gray-200 rounded-full h-8 mb-6">
-                {totalSalesAmount + totalExpensesAmount > 0 ? (
-                  <div
-                    className="bg-blue-500 h-8 rounded-l-full flex items-center justify-start pl-3"
-                    style={{
-                      width: `${Math.min(100, (totalSalesAmount / (totalSalesAmount + totalExpensesAmount)) * 100)}%`
-                    }}
-                  >
-                    <span className="text-xs font-medium text-white">
-                      Sales {((totalSalesAmount / (totalSalesAmount + totalExpensesAmount)) * 100).toFixed(1)}%
-                    </span>
-                  </div>
-                ) : (
-                  <div className="h-8 flex items-center justify-center">
-                    <span className="text-xs text-gray-600">No data</span>
-                  </div>
-                )}
-              </div>
-
-              <div className="flex justify-between mb-2">
-                <div className="text-sm text-gray-600">Sales: {formatCurrency(totalSalesAmount)}</div>
-                <div className="text-sm text-gray-600">Expenses: {formatCurrency(totalExpensesAmount)}</div>
-              </div>
-
-              <div className="mb-4">
-                <h3 className="text-base font-medium mb-2">Profit Margin</h3>
-                <div className="relative pt-1">
-                  {totalSalesAmount > 0 ? (
-                    <>
-                      <div className="flex mb-2 items-center justify-between">
-                        <div>
-                          <span className="text-xs font-semibold inline-block py-1 px-2 uppercase rounded-full text-blue-600 bg-blue-200">
-                            {totalSalesAmount > 0
-                              ? `${((totalProfit / totalSalesAmount) * 100).toFixed(1)}%`
-                              : '0%'
-                            }
-                          </span>
-                        </div>
-                        <div className="text-right">
-                          <span className="text-xs font-semibold inline-block text-blue-600">
-                            {formatCurrency(totalProfit)}
-                          </span>
-                        </div>
-                      </div>
-                      <div className="overflow-hidden h-2 mb-4 text-xs flex rounded bg-gray-200">
-                        <div style={{ width: `${Math.max(0, Math.min(100, (totalProfit / totalSalesAmount) * 100))}%` }}
-                          className={`shadow-none flex flex-col text-center whitespace-nowrap text-white justify-center ${totalProfit >= 0 ? 'bg-green-500' : 'bg-red-500'}`}>
-                        </div>
-                      </div>
-                    </>
-                  ) : (
-                    <div className="text-center text-gray-500 py-2">No sales data available</div>
-                  )}
-                </div>
-              </div>
-            </div>
-          </CardBody>
-        </Card>
+       
 
         <Card>
           <CardHeader>
@@ -764,12 +706,12 @@ const AnalyticsDashboard: React.FC = () => {
                         <td className="px-6 py-4 whitespace-nowrap text-center">
                           <div className="text-sm text-gray-900 font-semibold">{product.stock}</div>
                           <div className="w-full bg-gray-200 rounded-full h-2.5 mt-2"></div>
-                            <div
-                              className={`h-2.5 rounded-full ${criticalThreshold ? 'bg-red-600' :
-                                product.stock <= product.minStock ? 'bg-yellow-500' : 'bg-yellow-300'
-                                }`}
-                              style={{ width: `${stockPercentage}%` }}
-                            ></div>
+                          <div
+                            className={`h-2.5 rounded-full ${criticalThreshold ? 'bg-red-600' :
+                              product.stock <= product.minStock ? 'bg-yellow-500' : 'bg-yellow-300'
+                              }`}
+                            style={{ width: `${stockPercentage}%` }}
+                          ></div>
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-center">
                           <div className="text-sm text-gray-900">{product.minStock}</div>

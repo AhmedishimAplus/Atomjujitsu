@@ -21,17 +21,14 @@ import {
 
 
 const InventoryManagement: React.FC = () => {
-  const { state, dispatch } = useAppContext();
+  const { } = useAppContext(); // Keeping the context import for future use
   const [searchTerm, setSearchTerm] = useState('');
   const [productModalOpen, setProductModalOpen] = useState(false);
-  const [deleteModalOpen, setDeleteModalOpen] = useState(false);
-  const [editingProduct, setEditingProduct] = useState<ProductItem | null>(null);
+  const [deleteModalOpen, setDeleteModalOpen] = useState(false);  const [editingProduct, setEditingProduct] = useState<ProductItem | null>(null);
   const [categoryModalOpen, setCategoryModalOpen] = useState(false);
   const [categoryForm, setCategoryForm] = useState({ name: '', subcategories: [''] });
-  const [selectedCategory, setSelectedCategory] = useState<any>(null);
-  const [selectedSubcategory, setSelectedSubcategory] = useState<string>('');
-  const [subcatEditMode, setSubcatEditMode] = useState(false);
   const [products, setProducts] = useState<any[]>([]);
+  const [editableField, setEditableField] = useState<{productId: string, field: string, value: string | number} | null>(null);
   const [formData, setFormData] = useState<any>({
     name: '',
     staffPrice: 0,
@@ -101,15 +98,7 @@ const InventoryManagement: React.FC = () => {
       ...prev,
       [name]: type === 'number' ? (value === '' ? '' : Number(value)) : value
     }));
-  };
-
-  // Handle category selection
-  const handleCategoryChange = (value: string) => {
-    setFormData(prev => ({
-      ...prev,
-      categoryId: value
-    }));
-  };
+  };  // No need for handleCategorySelection since it's now handled in the Select onChange directly
   // Handle saving product (create or update via backend)
   const handleSaveProduct = async () => {
     try {
@@ -207,16 +196,14 @@ const InventoryManagement: React.FC = () => {
   const handleOpenCategoryModal = () => {
     setCategoryForm({ name: '', subcategories: [''] });
     setCategoryModalOpen(true);
-  };
-  const handleCategoryFormChange = (idx: number, value: string) => {
-    setCategoryForm(prev => {
+  };  const handleCategoryFormChange = (idx: number, value: string) => {
+    setCategoryForm((prev: typeof categoryForm) => {
       const newSubs = [...prev.subcategories];
       newSubs[idx] = value;
       return { ...prev, subcategories: newSubs };
     });
-  };
-  const handleCategoryNameChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setCategoryForm(prev => ({ ...prev, name: e.target.value }));
+  };  const handleCategoryNameChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setCategoryForm((prev: typeof categoryForm) => ({ ...prev, name: e.target.value }));
   };
   const handleAddSubcategoryField = () => {
     setCategoryForm(prev => ({ ...prev, subcategories: [...prev.subcategories, ''] }));
@@ -255,6 +242,116 @@ const InventoryManagement: React.FC = () => {
     } catch (error: any) {
       console.error('Error deleting subcategory:', error);
       alert(error.response?.data?.error || 'Error deleting subcategory');
+    }
+  };
+
+  // Handle direct field editing
+  const handleStartEditing = (productId: string, field: string, value: string | number) => {
+    setEditableField({ productId, field, value });
+  };
+
+  const handleFieldChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (editableField) {
+      setEditableField({
+        ...editableField,
+        value: e.target.value
+      });
+    }
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent, productId: string) => {
+    if (e.key === 'Enter' && editableField) {
+      handleSaveField(productId);
+    } else if (e.key === 'Escape') {
+      setEditableField(null);
+    }
+  };
+
+  const handleSaveField = async (productId: string) => {
+    if (!editableField) return;
+
+    try {
+      const product = products.find(p => p._id === productId);
+      if (!product) return;
+
+      const field = editableField.field;
+      let value: number | string = editableField.value;
+
+      // Convert to number for numeric fields
+      if (['staffPrice', 'sellPrice', 'costPrice', 'stock'].includes(field)) {
+        value = field === 'stock' 
+          ? Math.max(0, parseInt(value as string)) 
+          : Math.max(0, parseFloat(value as string));
+      }
+
+      const payload: any = {
+        ...product,
+        [field]: value
+      };
+
+      // Remove costPrice if owner is not Quarter
+      if (product.owner !== 'Quarter' && field !== 'owner') {
+        delete payload.costPrice;
+      }
+
+      await updateProduct(productId, payload);
+      fetchProductsAndCategories();
+      setEditableField(null);
+    } catch (error) {
+      console.error('Error updating field:', error);
+      alert('Failed to update product field.');
+    }
+  };
+  
+  const handleIncrement = (productId: string, field: string, currentValue: number) => {
+    try {
+      const product = products.find(p => p._id === productId);
+      if (!product) return;
+
+      let step = field === 'stock' ? 1 : 0.5;
+      let newValue = Math.max(0, currentValue + step);
+      
+      const payload = {
+        ...product,
+        [field]: newValue
+      };
+
+      // Remove costPrice if owner is not Quarter
+      if (product.owner !== 'Quarter' && field !== 'owner') {
+        delete payload.costPrice;
+      }
+
+      updateProduct(productId, payload);
+      fetchProductsAndCategories();
+    } catch (error) {
+      console.error('Error incrementing field:', error);
+      alert('Failed to update product field.');
+    }
+  };
+  
+  const handleDecrement = (productId: string, field: string, currentValue: number) => {
+    try {
+      const product = products.find(p => p._id === productId);
+      if (!product) return;
+
+      let step = field === 'stock' ? 1 : 0.5;
+      let newValue = Math.max(0, currentValue - step);
+      
+      const payload = {
+        ...product,
+        [field]: newValue
+      };
+
+      // Remove costPrice if owner is not Quarter
+      if (product.owner !== 'Quarter' && field !== 'owner') {
+        delete payload.costPrice;
+      }
+
+      updateProduct(productId, payload);
+      fetchProductsAndCategories();
+    } catch (error) {
+      console.error('Error decrementing field:', error);
+      alert('Failed to update product field.');
     }
   };
 
@@ -322,8 +419,7 @@ const InventoryManagement: React.FC = () => {
         <CardBody className="p-0">
           <div className="overflow-x-auto">
             <table className="min-w-full divide-y divide-gray-200">
-              <thead className="bg-gray-50">
-                <tr>
+              <thead className="bg-gray-50">                <tr>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                     Name
                   </th>
@@ -332,6 +428,9 @@ const InventoryManagement: React.FC = () => {
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                     Subcategory
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Owner
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                     Staff Price
@@ -360,21 +459,170 @@ const InventoryManagement: React.FC = () => {
                       <div className="text-sm text-gray-900">
                         {product.categoryId?.name || 'N/A'}
                       </div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
+                    </td>                    <td className="px-6 py-4 whitespace-nowrap">
                       <div className="text-sm text-gray-900">{product.subcategory || 'N/A'}</div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="text-sm text-gray-900">{product.staffPrice}</div>
+                      <div className="text-sm text-gray-900">{product.owner || 'Quarter'}</div>
+                    </td>                    <td className="px-6 py-4 whitespace-nowrap">
+                      {editableField && editableField.productId === product._id && editableField.field === 'staffPrice' ? (
+                        <div className="flex items-center">
+                          <input
+                            type="number"
+                            className="w-20 px-2 py-1 border rounded text-sm"
+                            value={editableField.value}
+                            onChange={handleFieldChange}
+                            onBlur={() => handleSaveField(product._id)}
+                            onKeyDown={(e) => handleKeyDown(e, product._id)}
+                            step="0.01"
+                            min="0"
+                            autoFocus
+                          />
+                        </div>
+                      ) : (
+                        <div className="flex items-center text-sm text-gray-900 group">                          <button 
+                            className="opacity-0 group-hover:opacity-100 w-5 h-5 flex items-center justify-center rounded-full mr-1 text-gray-500 hover:text-white hover:bg-red-500 transition-all"
+                            onClick={() => handleDecrement(product._id, 'staffPrice', product.staffPrice)}
+                          >
+                            -
+                          </button>
+                          
+                          <span 
+                            className="cursor-pointer min-w-[40px] text-center"
+                            onDoubleClick={() => handleStartEditing(product._id, 'staffPrice', product.staffPrice)}
+                          >
+                            {product.staffPrice}
+                          </span>
+                          
+                          <button 
+                            className="opacity-0 group-hover:opacity-100 w-5 h-5 flex items-center justify-center rounded-full ml-1 text-gray-500 hover:text-white hover:bg-green-500 transition-all"
+                            onClick={() => handleIncrement(product._id, 'staffPrice', product.staffPrice)}
+                          >
+                            +
+                          </button>
+                        </div>
+                      )}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="text-sm text-gray-900">{product.sellPrice}</div>
+                      {editableField && editableField.productId === product._id && editableField.field === 'sellPrice' ? (
+                        <div className="flex items-center">
+                          <input
+                            type="number"
+                            className="w-20 px-2 py-1 border rounded text-sm"
+                            value={editableField.value}
+                            onChange={handleFieldChange}
+                            onBlur={() => handleSaveField(product._id)}
+                            onKeyDown={(e) => handleKeyDown(e, product._id)}
+                            step="0.01"
+                            min="0"
+                            autoFocus
+                          />
+                        </div>
+                      ) : (
+                        <div className="flex items-center text-sm text-gray-900 group">                          <button 
+                            className="opacity-0 group-hover:opacity-100 w-5 h-5 flex items-center justify-center rounded-full mr-1 text-gray-500 hover:text-white hover:bg-red-500 transition-all"
+                            onClick={() => handleDecrement(product._id, 'sellPrice', product.sellPrice)}
+                          >
+                            -
+                          </button>
+                          
+                          <span 
+                            className="cursor-pointer min-w-[40px] text-center"
+                            onDoubleClick={() => handleStartEditing(product._id, 'sellPrice', product.sellPrice)}
+                          >
+                            {product.sellPrice}
+                          </span>
+                          
+                          <button 
+                            className="opacity-0 group-hover:opacity-100 w-5 h-5 flex items-center justify-center rounded-full ml-1 text-gray-500 hover:text-white hover:bg-green-500 transition-all"
+                            onClick={() => handleIncrement(product._id, 'sellPrice', product.sellPrice)}
+                          >
+                            +
+                          </button>
+                        </div>
+                      )}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="text-sm text-gray-900">{product.costPrice || 'N/A'}</div>
+                      {product.owner === 'Quarter' ? (
+                        editableField && editableField.productId === product._id && editableField.field === 'costPrice' ? (
+                          <div className="flex items-center">
+                            <input
+                              type="number"
+                              className="w-20 px-2 py-1 border rounded text-sm"
+                              value={editableField.value}
+                              onChange={handleFieldChange}
+                              onBlur={() => handleSaveField(product._id)}
+                              onKeyDown={(e) => handleKeyDown(e, product._id)}
+                              step="0.01"
+                              min="0"
+                              autoFocus
+                            />
+                          </div>
+                        ) : (
+                          <div className="flex items-center text-sm text-gray-900 group">                            <button 
+                              className="opacity-0 group-hover:opacity-100 w-5 h-5 flex items-center justify-center rounded-full mr-1 text-gray-500 hover:text-white hover:bg-red-500 transition-all"
+                              onClick={() => handleDecrement(product._id, 'costPrice', product.costPrice || 0)}
+                            >
+                              -
+                            </button>
+                            
+                            <span 
+                              className="cursor-pointer min-w-[40px] text-center"
+                              onDoubleClick={() => handleStartEditing(product._id, 'costPrice', product.costPrice || 0)}
+                            >
+                              {product.costPrice || 0}
+                            </span>
+                            
+                            <button 
+                              className="opacity-0 group-hover:opacity-100 w-5 h-5 flex items-center justify-center rounded-full ml-1 text-gray-500 hover:text-white hover:bg-green-500 transition-all"
+                              onClick={() => handleIncrement(product._id, 'costPrice', product.costPrice || 0)}
+                            >
+                              +
+                            </button>
+                          </div>
+                        )
+                      ) : (
+                        <div className="text-sm text-gray-500">N/A</div>
+                      )}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="text-sm text-gray-900">{product.stock}</div>
+                      {editableField && editableField.productId === product._id && editableField.field === 'stock' ? (
+                        <div className="flex items-center">
+                          <input
+                            type="number"
+                            className="w-20 px-2 py-1 border rounded text-sm"
+                            value={editableField.value}
+                            onChange={handleFieldChange}
+                            onBlur={() => handleSaveField(product._id)}
+                            onKeyDown={(e) => handleKeyDown(e, product._id)}
+                            step="1"
+                            min="0"
+                            autoFocus
+                          />
+                        </div>
+                      ) : (
+                        <div className="flex items-center text-sm text-gray-900 group">                          <button 
+                            className="opacity-0 group-hover:opacity-100 w-5 h-5 flex items-center justify-center rounded-full mr-1 text-gray-500 hover:text-white hover:bg-red-500 transition-all"
+                            onClick={() => handleDecrement(product._id, 'stock', product.stock)}
+                          >
+                            -
+                          </button>
+                          
+                          <span 
+                            className="cursor-pointer min-w-[40px] text-center"
+                            onDoubleClick={() => handleStartEditing(product._id, 'stock', product.stock)}
+                          >
+                            {product.stock}
+                          </span>
+                          
+                          <button 
+                            className="opacity-0 group-hover:opacity-100 w-5 h-5 flex items-center justify-center rounded-full ml-1 text-gray-500 hover:text-white hover:bg-green-500 transition-all"
+                            onClick={() => handleIncrement(product._id, 'stock', product.stock)}
+                          >
+                            +
+                          </button>
+                        </div>
+                      )}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                       <Button
@@ -481,9 +729,8 @@ const InventoryManagement: React.FC = () => {
             options={[
               { value: 'Quarter', label: 'Quarter' },
               { value: 'Sharoofa', label: 'Sharoofa' }
-            ]}
-            value={formData.owner}
-            onChange={val => setFormData((prev: any) => ({ ...prev, owner: val }))}
+            ]}            value={formData.owner}
+            onChange={val => setFormData((prev: typeof formData) => ({ ...prev, owner: val }))}
             fullWidth
           />          <Select
             label="Category"
@@ -491,9 +738,8 @@ const InventoryManagement: React.FC = () => {
               { value: '', label: 'Select a category' },
               ...categories.map(cat => ({ value: cat._id, label: cat.name }))
             ]}
-            value={formData.categoryId}
-            onChange={val => {
-              setFormData((prev: any) => ({
+            value={formData.categoryId}            onChange={val => {
+              setFormData((prev: typeof formData) => ({
                 ...prev,
                 categoryId: val,
                 subcategory: '' // Reset subcategory when category changes
@@ -512,7 +758,7 @@ const InventoryManagement: React.FC = () => {
                 ]
             }
             value={formData.subcategory}
-            onChange={val => setFormData((prev: any) => ({ ...prev, subcategory: val }))}
+            onChange={val => setFormData((prev: typeof formData) => ({ ...prev, subcategory: val }))}
             fullWidth
             disabled={!formData.categoryId}
             error={formData.categoryId && !formData.subcategory ? 'Please select a subcategory' : undefined}
@@ -532,7 +778,7 @@ const InventoryManagement: React.FC = () => {
               id="isAvailable"
               type="checkbox"
               checked={formData.isAvailable}
-              onChange={e => setFormData((prev: any) => ({ ...prev, isAvailable: e.target.checked }))}
+              onChange={e => setFormData((prev: typeof formData) => ({ ...prev, isAvailable: e.target.checked }))}
             />
           </div>
 
