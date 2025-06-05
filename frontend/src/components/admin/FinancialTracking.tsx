@@ -580,22 +580,26 @@ const FinancialTracking: React.FC = () => {
                       const isWaterBottle = item.name.toLowerCase().includes('water bottle');
                       const hasFreeQuantity = item.freeQuantity > 0;
                       const freeQty = item.freeQuantity || 0;
-                      const paidQty = item.paidQuantity || item.quantity;
-
-                      // Calculate correct profit:
-                      // 1. For water bottles with allowance: paid portion * (price - cost) - free portion * cost
+                      const paidQty = item.paidQuantity || item.quantity;                      // Calculate correct profit:
+                      // 1. For free items: set price to 0 and calculate profit (-cost)
                       // 2. For regular items: (price - cost) * quantity
                       let profit = 0;
+                      let displayPriceUsed = item.priceUsed;
 
                       if (owner !== 'Sharoofa') {
-                        if (isWaterBottle && hasFreeQuantity) {
-                          // For paid water bottles: normal profit calculation
+                        if (hasFreeQuantity) {
+                          // For paid portion: normal profit calculation
                           const paidProfit = (item.priceUsed - costPrice) * paidQty;
-                          // For free water bottles: negative profit (we're giving away at cost)
-                          const freeBottleCost = costPrice * freeQty;
-                          profit = paidProfit - freeBottleCost;
+                          // For free portion: price is 0, so profit is -costPrice per item
+                          const freePortion = -costPrice * freeQty;
+                          profit = paidProfit + freePortion;
+
+                          // Set display price to 0 for free items
+                          if (item.freeQuantity === item.quantity) {
+                            displayPriceUsed = 0;
+                          }
                         } else {
-                          // Regular profit calculation for non-water bottles or water bottles without allowance
+                          // Regular profit calculation for non-free items
                           profit = (item.priceUsed - costPrice) * item.quantity;
                         }
                       }
@@ -625,12 +629,11 @@ const FinancialTracking: React.FC = () => {
                           <td className="px-6 py-4 whitespace-nowrap">{owner || ''}</td>
                           <td className="px-6 py-4 whitespace-nowrap">{categoryName}</td>
                           <td className="px-6 py-4 whitespace-nowrap">{product?.subcategory || ''}</td>
-                          <td className="px-6 py-4 whitespace-nowrap text-right">{item.quantity}</td>
-                          <td className="px-6 py-4 whitespace-nowrap text-right">
+                          <td className="px-6 py-4 whitespace-nowrap text-right">{item.quantity}</td>                          <td className="px-6 py-4 whitespace-nowrap text-right">
                             {item.freeQuantity > 0 ? (
                               <div>
                                 <div>{formatCurrency(item.priceUsed)}</div>
-                                <div className="text-xs text-green-600">({item.freeQuantity} free)</div>
+                                <div className="text-xs text-green-600">({item.freeQuantity} free - $0.00)</div>
                               </div>
                             ) : (
                               formatCurrency(item.priceUsed)

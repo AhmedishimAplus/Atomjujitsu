@@ -612,11 +612,16 @@ const InventoryManagement: React.FC = () => {
                         onClick={() => handleDecrement(product._id, 'stock', product.stock)}
                       >
                         -
-                      </button>                          <span
+                      </button>                        <span
                         className={`cursor-pointer min-w-[40px] text-center ${product.stock === 0 ? 'font-bold text-red-600' : ''}`}
                         onDoubleClick={() => handleStartEditing(product._id, 'stock', product.stock)}
                       >
-                          {product.stock === 0 ? 'OUT OF STOCK' : product.stock}
+                          {product.stock === 0 ? (
+                            <div className="flex items-center justify-center gap-1">
+                              <span className="inline-flex items-center justify-center w-4 h-4 bg-red-600 text-white rounded-full text-xs">!</span>
+                              <span>OUT OF STOCK</span>
+                            </div>
+                          ) : product.stock}
                         </span>
 
                         <button
