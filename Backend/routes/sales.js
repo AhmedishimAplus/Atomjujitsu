@@ -76,7 +76,7 @@ router.get('/staff/:staffId/recent-purchases', auth, async (req, res) => {
 router.get('/staff-purchases', auth, async (req, res) => {
     try {
         const salesStaff = await Sale.find({ staffDiscount: true, staffId: { $exists: true, $ne: null } }).sort({ createdAt: -1 }).lean();
-        
+
         // Make sure we display the proper amount even with free water bottles
         const formattedSalesStaff = salesStaff.map(sale => {
             // If the total is zero but subtotal isn't, use the original total before water bottle discounts
@@ -85,7 +85,7 @@ router.get('/staff-purchases', auth, async (req, res) => {
             }
             return { ...sale, displayAmount: sale.total };
         });
-        
+
         return res.json(formattedSalesStaff);
     }
     catch (error) {
@@ -155,12 +155,15 @@ router.post('/', [
             subtotal,
             staffDiscount,
             paymentMethod,
-            total,
+            total, // Will be recalculated if there are water bottle allowances
             createdBy: req.user.id
         });
 
         // Initialize Sharoofa amount
         let sharoofaAmount = 0;
+
+        // Calculate non-water bottle items total (used for staff discount cases)
+        let nonWaterBottleTotal = 0;
 
         // Handle staff discount logic if applicable
         if (staffDiscount) {
@@ -188,7 +191,7 @@ router.post('/', [
             let hasLargeWaterBottle = false;
             let hasSmallWaterBottle = false;
 
-            // Process each item in the sale and calculate Sharoofa amount
+            // Calculate non-water bottle total first
             for (const item of items) {
                 const product = await Product.findById(item.productId);
                 if (!product) {
@@ -201,10 +204,16 @@ router.post('/', [
                 }
 
                 // Check if the product is a water bottle
-                if (product.name.toLowerCase().includes('large water bottle')) {
+                const isLargeWaterBottle = product.name.toLowerCase().includes('large water bottle');
+                const isSmallWaterBottle = product.name.toLowerCase().includes('small water bottle');
+
+                if (isLargeWaterBottle) {
                     hasLargeWaterBottle = true;
-                } else if (product.name.toLowerCase().includes('small water bottle')) {
+                } else if (isSmallWaterBottle) {
                     hasSmallWaterBottle = true;
+                } else {
+                    // If not a water bottle, add to the non-water bottle total
+                    nonWaterBottleTotal += item.priceUsed * item.quantity;
                 }
 
                 // Calculate Sharoofa amount for this item
@@ -225,7 +234,12 @@ router.post('/', [
             const smallWaterBottleItems = items.filter(item => {
                 const productName = item.name.toLowerCase();
                 return productName.includes('small water bottle');
-            });            // Process large water bottles
+            });
+
+            // Track the total discount for all water bottles
+            let totalWaterBottleDiscount = 0;
+
+            // Process large water bottles
             if (largeWaterBottleItems.length > 0) {
                 let totalLargeBottles = 0;
                 largeWaterBottleItems.forEach(item => {
@@ -235,7 +249,9 @@ router.post('/', [
                 // Calculate how many bottles can be covered by allowance
                 let freeBottles = Math.min(staff.Large_bottles, totalLargeBottles);
                 let freeBottlesRemaining = freeBottles;
-                sale.largeWaterBottlesFree = freeBottles;                // Update staff's allowance
+                sale.largeWaterBottlesFree = freeBottles;
+
+                // Update staff's allowance
                 if (freeBottles > 0) {
                     staff.Large_bottles -= freeBottles;
 
@@ -245,14 +261,12 @@ router.post('/', [
                             const freeBeveragesInThisItem = Math.min(freeBottlesRemaining, item.quantity);
                             freeBottlesRemaining -= freeBeveragesInThisItem;
 
-                            // Calculate the discount and apply it to the total
+                            // Calculate the discount amount
                             const regularPrice = item.regularPrice || item.priceUsed;
                             const discountAmount = regularPrice * freeBeveragesInThisItem;
 
-                            // Ensure total doesn't go below zero by limiting the discount
-                            const safeDiscountAmount = Math.min(discountAmount, sale.total);
-                            sale.total -= safeDiscountAmount;
-                            sale.subtotal -= safeDiscountAmount; // Update subtotal as well to match total
+                            // Add to total discount
+                            totalWaterBottleDiscount += discountAmount;
 
                             // Store original price and quantity information for reference
                             item.freeQuantity = freeBeveragesInThisItem;
@@ -270,7 +284,9 @@ router.post('/', [
                 // Calculate how many bottles can be covered by allowance
                 let freeBottles = Math.min(staff.Small_bottles, totalSmallBottles);
                 let freeBottlesRemaining = freeBottles;
-                sale.smallWaterBottlesFree = freeBottles;                // Update staff's allowance
+                sale.smallWaterBottlesFree = freeBottles;
+
+                // Update staff's allowance
                 if (freeBottles > 0) {
                     staff.Small_bottles -= freeBottles;
 
@@ -280,14 +296,12 @@ router.post('/', [
                             const freeBeveragesInThisItem = Math.min(freeBottlesRemaining, item.quantity);
                             freeBottlesRemaining -= freeBeveragesInThisItem;
 
-                            // Calculate the discount and apply it to the total
+                            // Calculate the discount amount
                             const regularPrice = item.regularPrice || item.priceUsed;
                             const discountAmount = regularPrice * freeBeveragesInThisItem;
 
-                            // Ensure total doesn't go below zero by limiting the discount
-                            const safeDiscountAmount = Math.min(discountAmount, sale.total);
-                            sale.total -= safeDiscountAmount;
-                            sale.subtotal -= safeDiscountAmount; // Update subtotal as well to match total
+                            // Add to total discount
+                            totalWaterBottleDiscount += discountAmount;
 
                             // Store original price and quantity information for reference
                             item.freeQuantity = freeBeveragesInThisItem;
@@ -295,6 +309,17 @@ router.post('/', [
                         }
                     }
                 }
+            }
+
+            // Now apply the water bottle discount and calculate the final total with non-water bottle items
+            sale.total = Math.max(0, nonWaterBottleTotal);
+            sale.subtotal = sale.total;
+
+            // For the purposes of record-keeping, we never want the total/subtotal to be 0 when there are paid items
+            if (sale.total === 0 && nonWaterBottleTotal > 0) {
+                console.log("Warning: Sale total was 0 but non-water bottle items were present.");
+                sale.total = nonWaterBottleTotal;
+                sale.subtotal = nonWaterBottleTotal;
             }
 
             await staff.save();

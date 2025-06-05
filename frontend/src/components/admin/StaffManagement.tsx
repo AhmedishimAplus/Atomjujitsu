@@ -402,13 +402,13 @@ const StaffManagement: React.FC = () => {
                       <div className="text-sm text-gray-500 italic">No recent purchases</div>
                     ) : (
                       <div className="space-y-1">                        {recentPurchases[staff.id].map((purchase, index) => (
-                          <div key={index} className="flex justify-between text-sm text-gray-600">
-                            <span>{formatDate(purchase.date)}</span>
-                            <span className="font-medium">
-                              ${(purchase.displayAmount !== undefined ? purchase.displayAmount : purchase.total).toFixed(2)}
-                            </span>
-                          </div>
-                        ))}
+                        <div key={index} className="flex justify-between text-sm text-gray-600">
+                          <span>{formatDate(purchase.date)}</span>
+                          <span className="font-medium">
+                            ${(purchase.displayAmount !== undefined ? purchase.displayAmount : purchase.total).toFixed(2)}
+                          </span>
+                        </div>
+                      ))}
                       </div>
                     )}
                   </div>

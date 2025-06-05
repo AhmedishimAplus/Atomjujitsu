@@ -202,14 +202,14 @@ const CashierInterface: React.FC = () => {
   const handlePayment = async () => {
     // Prepare payload for backend
     const order = state.currentOrder;
-    
+
     // Calculate free water bottle quantities
     interface BottleInfo {
       productId: string;
       freeQuantity: number;
       paidQuantity: number;
     }
-    
+
     const freeBottleInfo: BottleInfo[] = [];
     const items = order.items.map(item => {
       const itemData: any = {
@@ -220,17 +220,17 @@ const CashierInterface: React.FC = () => {
         staffPrice: item.staffPrice ?? item.price, // fallback if not present
         priceUsed: item.price,
       };
-      
+
       // Calculate free vs. paid quantities for water bottles
       if (order.staffDiscount && selectedStaff) {
         const isLargeWaterBottle = item.name.toLowerCase().includes('large water bottle');
         const isSmallWaterBottle = item.name.toLowerCase().includes('small water bottle');
-        
+
         if (isLargeWaterBottle && selectedStaff.Large_bottles > 0) {
           const freeCount = Math.min(selectedStaff.Large_bottles, item.quantity);
           itemData.freeQuantity = freeCount;
           itemData.paidQuantity = item.quantity - freeCount;
-          
+
           freeBottleInfo.push({
             productId: item.productId,
             freeQuantity: freeCount,
@@ -240,7 +240,7 @@ const CashierInterface: React.FC = () => {
           const freeCount = Math.min(selectedStaff.Small_bottles, item.quantity);
           itemData.freeQuantity = freeCount;
           itemData.paidQuantity = item.quantity - freeCount;
-          
+
           freeBottleInfo.push({
             productId: item.productId,
             freeQuantity: freeCount,
@@ -248,10 +248,10 @@ const CashierInterface: React.FC = () => {
           });
         }
       }
-      
+
       return itemData;
     });
-    
+
     const payload: any = {
       items,
       subtotal: calculatePreviewTotal(),
@@ -727,7 +727,7 @@ const CashierInterface: React.FC = () => {
               const isFreeItem = item.freeQuantity && item.freeQuantity > 0;
               const paidQuantity = item.paidQuantity || item.quantity;
               const freeQuantity = item.freeQuantity || 0;
-              
+
               return (
                 <div key={index} className="flex justify-between">
                   <span>

@@ -197,10 +197,10 @@ function appReducer(state: AppState, action: AppAction): AppState {
 
     case 'COMPLETE_ORDER': {
       const { paymentMethod, freeBottleInfo } = action.payload;
-      
+
       // Copy the items with free bottle information if provided
       let itemsWithFreeBottleInfo = [...state.currentOrder.items];
-      
+
       if (freeBottleInfo) {
         // Update items with free bottle information
         itemsWithFreeBottleInfo = state.currentOrder.items.map(item => {
@@ -215,7 +215,7 @@ function appReducer(state: AppState, action: AppAction): AppState {
           return item;
         });
       }
-      
+
       const completedOrder: Order = {
         ...state.currentOrder,
         items: itemsWithFreeBottleInfo,
