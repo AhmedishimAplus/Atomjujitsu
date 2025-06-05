@@ -100,6 +100,11 @@ export const getStaffPurchases = async (params?: {
   return response.data;
 };
 
+export const getRecentStaffPurchases = async (staffId: string) => {
+  const response = await api.get(`/sales/staff-purchases/${staffId}/recent`);
+  return response.data;
+};
+
 export const getSalesHistoryWithCost = async (params?: {
   startDate?: string;
   endDate?: string;

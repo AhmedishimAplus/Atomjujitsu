@@ -5,7 +5,7 @@ import Button from '../ui/Button';
 import Input from '../ui/Input';
 import Modal from '../ui/Modal';
 import { formatDate } from '../../utils/helpers';
-import { User, Droplet, Plus, Minus, Edit, UserPlus, Save, RefreshCw } from 'lucide-react';
+import { User, Droplet, Plus, Minus, Edit, UserPlus, Save, RefreshCw, Clock } from 'lucide-react';
 import { StaffMember } from '../../types';
 import * as staffApi from '../../services/staffApi';
 import * as api from '../../services/api';
@@ -22,6 +22,9 @@ const StaffManagement: React.FC = () => {
   const [staffPurchases, setStaffPurchases] = useState<any[]>([]);
   const [purchasesByStaff, setPurchasesByStaff] = useState<Record<string, any[]>>({});
   const [isLoadingPurchases, setIsLoadingPurchases] = useState(false);
+  const [recentPurchases, setRecentPurchases] = useState<Record<string, any[]>>({});
+  const [viewingRecentPurchases, setViewingRecentPurchases] = useState<string | null>(null);
+  const [isLoadingRecentPurchases, setIsLoadingRecentPurchases] = useState(false);
 
   // Load staff data from API on component mount
   useEffect(() => {
@@ -222,6 +225,24 @@ const StaffManagement: React.FC = () => {
     setIsEditModalOpen(true);
   };
 
+  // Fetch recent purchases for a specific staff member
+  const fetchRecentPurchases = async (staffId: string) => {
+    setIsLoadingRecentPurchases(true);
+    setViewingRecentPurchases(staffId);
+
+    try {
+      const purchases = await api.getStaffRecentPurchases(staffId);
+      setRecentPurchases(prev => ({
+        ...prev,
+        [staffId]: purchases
+      }));
+    } catch (error) {
+      console.error('Failed to fetch recent purchases:', error);
+    } finally {
+      setIsLoadingRecentPurchases(false);
+    }
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
@@ -358,6 +379,39 @@ const StaffManagement: React.FC = () => {
                 {!purchasesByStaff[staff.name] || purchasesByStaff[staff.name].length === 0 ? (
                   <div className="text-sm text-gray-500 italic">No recent purchases</div>
                 ) : null}
+                <div className="flex justify-end mt-2">
+                  <Button
+                    variant="link"
+                    size="sm"
+                    onClick={() => {
+                      if (viewingRecentPurchases === staff.id) {
+                        setViewingRecentPurchases(null);
+                      } else {
+                        fetchRecentPurchases(staff.id);
+                      }
+                    }}
+                    leftIcon={<Clock size={16} />}
+                    className="text-blue-600"
+                  >
+                    {viewingRecentPurchases === staff.id ? 'Hide Recent Purchases' : 'View Recent Purchases'}
+                  </Button>
+                </div>
+                {viewingRecentPurchases === staff.id && recentPurchases[staff.id] && (
+                  <div className="mt-2">
+                    {recentPurchases[staff.id].length === 0 ? (
+                      <div className="text-sm text-gray-500 italic">No recent purchases</div>
+                    ) : (
+                      <div className="space-y-1">
+                        {recentPurchases[staff.id].map((purchase, index) => (
+                          <div key={index} className="flex justify-between text-sm text-gray-600">
+                            <span>{formatDate(purchase.createdAt)}</span>
+                            <span className="font-medium">${purchase.total.toFixed(2)}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
             </CardBody>
           </Card>
