@@ -13,10 +13,9 @@ import { ProductItem } from '../../types';
 
 const FinancialTracking: React.FC = () => {
   const { state, dispatch } = useAppContext();
-  const [expenseModalOpen, setExpenseModalOpen] = useState(false);
-  const [selectedCategory, setSelectedCategory] = useState<string>('all');
+  const [expenseModalOpen, setExpenseModalOpen] = useState(false); const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [dateRange, setDateRange] = useState<string>('all');
-  const [view, setView] = useState<'expenses' | 'sales'>('expenses');
+  const [view, setView] = useState<'expenses' | 'sales' | 'orders'>('expenses');
   const [categories, setCategories] = useState<any[]>([]);
   const [selectedSalesCategory, setSelectedSalesCategory] = useState<string>('all');
   const [selectedSalesSubcategory, setSelectedSalesSubcategory] = useState<string>('all');
@@ -216,7 +215,6 @@ const FinancialTracking: React.FC = () => {
     end.setHours(23, 59, 59, 999);
     return { start, end };
   }
-
   // Calculate sales/profit for current week and month (excluding Sharoofa)
   const { start: weekStart, end: weekEnd } = getCurrentWeekRange();
   const now = new Date();
@@ -230,9 +228,32 @@ const FinancialTracking: React.FC = () => {
       const product = typeof item.productId === 'string' ? products.find(p => p._id === item.productId) : undefined;
       const owner = product?.owner || item.owner;
       if (owner === 'Sharoofa') return;
-      const costPrice = productCostMap[item.productId] !== undefined ? productCostMap[item.productId] : (typeof item.costPrice === 'number' && !isNaN(item.costPrice) ? item.costPrice : 0);
-      const saleAmount = item.priceUsed * item.quantity;
-      const profit = (item.priceUsed - costPrice) * item.quantity;
+
+      const costPrice = productCostMap[item.productId] !== undefined ? productCostMap[item.productId] :
+        (typeof item.costPrice === 'number' && !isNaN(item.costPrice) ? item.costPrice : 0);
+
+      // Handle free water bottles correctly
+      const isWaterBottle = item.name.toLowerCase().includes('water bottle');
+      const hasFreeQuantity = item.freeQuantity > 0;
+      const freeQty = item.freeQuantity || 0;
+      const paidQty = item.paidQuantity || item.quantity;
+
+      let saleAmount = 0;
+      let profit = 0;
+
+      if (isWaterBottle && hasFreeQuantity) {
+        // For paid water bottles
+        saleAmount = item.priceUsed * paidQty; // Only count the paid portion for sales
+        const paidProfit = (item.priceUsed - costPrice) * paidQty;
+        // For free water bottles - negative profit (we're giving away at cost)
+        const freeBottleCost = costPrice * freeQty;
+        profit = paidProfit - freeBottleCost;
+      } else {
+        // Regular calculation for non-water bottles or water bottles without allowance
+        saleAmount = item.priceUsed * item.quantity;
+        profit = (item.priceUsed - costPrice) * item.quantity;
+      }
+
       if (saleDate >= weekStart && saleDate <= weekEnd) {
         weekSales += saleAmount;
         weekProfit += profit;
@@ -245,17 +266,17 @@ const FinancialTracking: React.FC = () => {
   });
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-        <h1 className="text-2xl font-bold text-gray-900">Financial Tracking</h1>
-        <div className="flex gap-2">
-          <Button variant={view === 'expenses' ? 'primary' : 'outline'} onClick={() => setView('expenses')}>Expenses</Button>
-          <Button variant={view === 'sales' ? 'primary' : 'outline'} onClick={() => setView('sales')}>Sales</Button>
-          {view === 'expenses' && (
-            <Button variant="primary" onClick={() => setExpenseModalOpen(true)} leftIcon={<Plus size={18} />}>Add Expense</Button>
-          )}
-        </div>
+    <div className="space-y-6">      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+      <h1 className="text-2xl font-bold text-gray-900">Financial Tracking</h1>
+      <div className="flex gap-2">
+        <Button variant={view === 'expenses' ? 'primary' : 'outline'} onClick={() => setView('expenses')}>Expenses</Button>
+        <Button variant={view === 'sales' ? 'primary' : 'outline'} onClick={() => setView('sales')}>Sales</Button>
+        <Button variant={view === 'orders' ? 'primary' : 'outline'} onClick={() => setView('orders')}>Order History</Button>
+        {view === 'expenses' && (
+          <Button variant="primary" onClick={() => setExpenseModalOpen(true)} leftIcon={<Plus size={18} />}>Add Expense</Button>
+        )}
       </div>
+    </div>
       {view === 'expenses' ? (
         <>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -386,6 +407,78 @@ const FinancialTracking: React.FC = () => {
             </CardBody>
           </Card>
         </>
+      ) : view === 'orders' ? (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {sales.map((sale: any) => (
+            <Card key={sale._id} className="shadow-md hover:shadow-lg transition-shadow">
+              <CardHeader className="pb-2">
+                <div className="flex justify-between items-center">
+                  <div>
+                    <h3 className="font-bold text-lg">{formatDate(sale.createdAt)}</h3>
+                    <p className="text-gray-500 text-sm">Order #{sale._id.substring(0, 8)}...</p>
+                  </div>
+                  <div className="bg-blue-100 text-blue-800 text-sm font-medium py-1 px-2 rounded">
+                    {sale.paymentMethod}
+                  </div>
+                </div>
+                {sale.staffName && (
+                  <div className="mt-1 text-sm text-gray-700">
+                    <span className="font-medium">Staff:</span> {sale.staffName}
+                  </div>
+                )}
+              </CardHeader>
+              <CardBody className="pt-2">
+                <div className="border-t border-gray-100 pt-3">
+                  <div className="space-y-2">
+                    {sale.items.map((item: any, idx: number) => {
+                      const isFreeBottle = item.freeQuantity > 0;
+                      const freeQty = item.freeQuantity || 0;
+                      const paidQty = item.paidQuantity || item.quantity;
+
+                      return (
+                        <div key={idx} className="flex justify-between text-sm">
+                          <div>
+                            <span className="font-medium">{item.name}</span>
+                            <span className="text-gray-500"> × {item.quantity}</span>
+                            {isFreeBottle && (
+                              <span className="text-green-600 text-xs ml-1">
+                                ({freeQty} free)
+                              </span>
+                            )}
+                          </div>
+                          <div className="text-right">
+                            {isFreeBottle ? (
+                              <div>
+                                <div>{formatCurrency(item.priceUsed * paidQty)}</div>
+                                {freeQty > 0 && (
+                                  <div className="text-green-600 text-xs">
+                                    {freeQty} × $0.00 (free)
+                                  </div>
+                                )}
+                              </div>
+                            ) : (
+                              formatCurrency(item.priceUsed * item.quantity)
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  <div className="mt-4 pt-3 border-t border-gray-100 flex justify-between font-medium">
+                    <span>Total</span>
+                    <span>{formatCurrency(sale.total)}</span>
+                  </div>
+                </div>
+              </CardBody>
+            </Card>
+          ))}
+          {sales.length === 0 && (
+            <div className="col-span-3 text-center py-8 text-gray-500">
+              No orders found
+            </div>
+          )}
+        </div>
       ) : (
         <>
 
@@ -477,40 +570,79 @@ const FinancialTracking: React.FC = () => {
                   <tbody className="bg-white divide-y divide-gray-200">
                     {sales.length === 0 ? (
                       <tr><td colSpan={8} className="px-6 py-4 text-center text-gray-500">No sales found</td></tr>
-                    ) : (
-                      sales.flatMap((sale: any) => sale.items.map((item: any, idx: number) => {
-                        // Get product info for category/subcategory/owner
-                        const product = typeof item.productId === 'string' ? products.find(p => p._id === item.productId) : undefined;
-                        const costPrice = productCostMap[item.productId] !== undefined ? productCostMap[item.productId] : (typeof item.costPrice === 'number' && !isNaN(item.costPrice) ? item.costPrice : 0);
-                        const owner = product?.owner || item.owner;
-                        // Only count profit if owner is not Sharoofa
-                        const profit = owner !== 'Sharoofa' ? (item.priceUsed - costPrice) * item.quantity : 0;
-                        // Get category name from product.categoryId
-                        let categoryName = '';
-                        if (product && product.categoryId) {
-                          let catId: string = '';
-                          if (typeof product.categoryId === 'string') {
-                            catId = product.categoryId;
-                          } else if (typeof product.categoryId === 'object' && product.categoryId !== null && '_id' in product.categoryId) {
-                            catId = (product.categoryId as any)._id;
-                          }
-                          const cat = categories.find((c: any) => c._id === catId);
-                          categoryName = cat ? cat.name : '';
+                    ) : (sales.flatMap((sale: any) => sale.items.map((item: any, idx: number) => {
+                      // Get product info for category/subcategory/owner
+                      const product = typeof item.productId === 'string' ? products.find(p => p._id === item.productId) : undefined;
+                      const costPrice = productCostMap[item.productId] !== undefined ? productCostMap[item.productId] : (typeof item.costPrice === 'number' && !isNaN(item.costPrice) ? item.costPrice : 0);
+                      const owner = product?.owner || item.owner;
+
+                      // Handle free water bottle quantities (profits should be negative for free bottles)
+                      const isWaterBottle = item.name.toLowerCase().includes('water bottle');
+                      const hasFreeQuantity = item.freeQuantity > 0;
+                      const freeQty = item.freeQuantity || 0;
+                      const paidQty = item.paidQuantity || item.quantity;
+
+                      // Calculate correct profit:
+                      // 1. For water bottles with allowance: paid portion * (price - cost) - free portion * cost
+                      // 2. For regular items: (price - cost) * quantity
+                      let profit = 0;
+
+                      if (owner !== 'Sharoofa') {
+                        if (isWaterBottle && hasFreeQuantity) {
+                          // For paid water bottles: normal profit calculation
+                          const paidProfit = (item.priceUsed - costPrice) * paidQty;
+                          // For free water bottles: negative profit (we're giving away at cost)
+                          const freeBottleCost = costPrice * freeQty;
+                          profit = paidProfit - freeBottleCost;
+                        } else {
+                          // Regular profit calculation for non-water bottles or water bottles without allowance
+                          profit = (item.priceUsed - costPrice) * item.quantity;
                         }
-                        return (
-                          <tr key={sale._id + '-' + idx}>
-                            <td className="px-6 py-4 whitespace-nowrap">{formatDate(sale.createdAt)}</td>
-                            <td className="px-6 py-4 whitespace-nowrap">{item.name}</td>
-                            <td className="px-6 py-4 whitespace-nowrap">{owner || ''}</td>
-                            <td className="px-6 py-4 whitespace-nowrap">{categoryName}</td>
-                            <td className="px-6 py-4 whitespace-nowrap">{product?.subcategory || ''}</td>
-                            <td className="px-6 py-4 whitespace-nowrap text-right">{item.quantity}</td>
-                            <td className="px-6 py-4 whitespace-nowrap text-right">{formatCurrency(item.priceUsed)}</td>
-                            <td className="px-6 py-4 whitespace-nowrap text-right">{formatCurrency(costPrice)}</td>
-                            <td className="px-6 py-4 whitespace-nowrap text-right">{formatCurrency(profit)}</td>
-                          </tr>
-                        );
-                      }))
+                      }
+
+                      // Get category name from product.categoryId
+                      let categoryName = '';
+                      if (product && product.categoryId) {
+                        let catId: string = '';
+                        if (typeof product.categoryId === 'string') {
+                          catId = product.categoryId;
+                        } else if (typeof product.categoryId === 'object' && product.categoryId !== null && '_id' in product.categoryId) {
+                          catId = (product.categoryId as any)._id;
+                        }
+                        const cat = categories.find((c: any) => c._id === catId);
+                        categoryName = cat ? cat.name : '';
+                      } return (
+                        <tr key={sale._id + '-' + idx}>
+                          <td className="px-6 py-4 whitespace-nowrap">{formatDate(sale.createdAt)}</td>
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            {item.name}
+                            {(item.freeQuantity > 0) && (
+                              <span className="ml-1 text-green-600 text-xs font-medium">
+                                ({item.freeQuantity} free)
+                              </span>
+                            )}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap">{owner || ''}</td>
+                          <td className="px-6 py-4 whitespace-nowrap">{categoryName}</td>
+                          <td className="px-6 py-4 whitespace-nowrap">{product?.subcategory || ''}</td>
+                          <td className="px-6 py-4 whitespace-nowrap text-right">{item.quantity}</td>
+                          <td className="px-6 py-4 whitespace-nowrap text-right">
+                            {item.freeQuantity > 0 ? (
+                              <div>
+                                <div>{formatCurrency(item.priceUsed)}</div>
+                                <div className="text-xs text-green-600">({item.freeQuantity} free)</div>
+                              </div>
+                            ) : (
+                              formatCurrency(item.priceUsed)
+                            )}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-right">{formatCurrency(costPrice)}</td>
+                          <td className="px-6 py-4 whitespace-nowrap text-right">
+                            <span className={profit < 0 ? "text-red-600" : ""}>{formatCurrency(profit)}</span>
+                          </td>
+                        </tr>
+                      );
+                    }))
                     )}
                   </tbody>
                 </table>
