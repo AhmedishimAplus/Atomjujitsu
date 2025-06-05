@@ -32,30 +32,39 @@ router.get('/', auth, async (req, res) => {
         res.status(500).json({ error: error.message });
     }
 });
+router.get('/staff-purchases', auth, async (req, res) => {
+   try{
+    const salesStaff=await Sale.find({staffDiscount:true,staffId:{$exists:true,$ne:null}}).sort({createdAt:-1}).lean();
+    return res.json(salesStaff);
+   }
+   catch(error){
+    return res.status(500).json({error:error.message});
+   }
+});
 
 // Get sale by ID
-router.get('/:id', auth, async (req, res) => {
-    try {
-        // Validate that the id is a valid ObjectId before querying
-        if (!req.params.id || !req.params.id.match(/^[0-9a-fA-F]{24}$/)) {
-            return res.status(400).json({ error: 'Invalid sale ID format' });
-        }
-        const sale = await Sale.findById(req.params.id)
-            .populate('staffId', 'name')
-            .populate('createdBy', 'name email');
+// router.get('/:id', auth, async (req, res) => {
+//     try {
+//         // Validate that the id is a valid ObjectId before querying
+//         if (!req.params.id || !req.params.id.match(/^[0-9a-fA-F]{24}$/)) {
+//             return res.status(400).json({ error: 'Invalid sale ID format' });
+//         }
+//         const sale = await Sale.findById(req.params.id)
+//             .populate('staffId', 'name')
+//             .populate('createdBy', 'name email');
 
-        if (!sale) {
-            return res.status(404).json({ error: 'Sale not found' });
-        }
+//         if (!sale) {
+//             return res.status(404).json({ error: 'Sale not found' });
+//         }
 
-        res.json(sale);
-    } catch (error) {
-        if (error.kind === 'ObjectId') {
-            return res.status(400).json({ error: 'Invalid sale ID format' });
-        }
-        res.status(500).json({ error: error.message });
-    }
-});
+//         res.json(sale);
+//     } catch (error) {
+//         if (error.kind === 'ObjectId') {
+//             return res.status(400).json({ error: 'Invalid sale ID format' });
+//         }
+//         res.status(500).json({ error: error.message });
+//     }
+// });
 
 // Process a sale (checkout)
 router.post('/', [
@@ -1160,51 +1169,8 @@ router.get('/profit/:period', auth, async (req, res) => {
 });
 
 // Get staff purchases
-router.get('/staff-purchases', auth, async (req, res) => {
-    try {
-        const { startDate, endDate } = req.query;
-        let query = { staffDiscount: true, staffName: { $exists: true, $ne: null } };
 
-        // Apply date filter if provided
-        if (startDate && endDate) {
-            const start = new Date(startDate);
-            start.setHours(0, 0, 0, 0);
-            const end = new Date(endDate);
-            end.setHours(23, 59, 59, 999);
 
-            query.createdAt = { $gte: start, $lte: end };
-        }
 
-        // Get all staff purchases sorted by most recent first
-        const staffPurchases = await Sale.find(query)
-            .sort({ createdAt: -1 })
-            .populate('staffId', 'name Large_bottles Small_bottles')
-            .populate('createdBy', 'name email');
-
-        // Transform data for frontend consumption
-        const formattedPurchases = staffPurchases.map(purchase => {
-            const { _id, staffName, paymentMethod, total, createdAt, items, staffId } = purchase;
-
-            return {
-                _id,
-                staffName,
-                paymentMethod,
-                total,
-                createdAt,
-                items,
-                staffId: staffId ? staffId._id : null,
-                staffDetails: staffId ? {
-                    name: staffId.name,
-                    largeBottles: staffId.Large_bottles,
-                    smallBottles: staffId.Small_bottles
-                } : null
-            };
-        });
-
-        res.json(formattedPurchases);
-    } catch (error) {
-        res.status(500).json({ error: error.message });
-    }
-});
 
 module.exports = router;
