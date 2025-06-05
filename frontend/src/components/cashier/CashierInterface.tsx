@@ -21,8 +21,7 @@ const CashierInterface: React.FC = () => {
   const [selectedStaff, setSelectedStaff] = useState<any>(null);
   const [products, setProducts] = useState<ProductItem[]>([]);
   const [categories, setCategories] = useState<any[]>([]);
-  const [staffList, setStaffList] = useState<{ id: string; name: string; Large_bottles: number; Small_bottles: number }[]>([]);
-  // Fetch products, categories, and staff on component mount
+  const [staffList, setStaffList] = useState<{ id: string; name: string; Large_bottles: number; Small_bottles: number }[]>([]);  // Fetch products, categories, and staff on component mount
   useEffect(() => {
     const fetchData = async () => {
       try {
@@ -46,6 +45,14 @@ const CashierInterface: React.FC = () => {
     };
     fetchData();
   }, []);
+
+  // Refresh staff data when receipt modal changes state
+  // This ensures we always have the latest allowance data
+  useEffect(() => {
+    if (receiptModalOpen) {
+      refreshStaffData();
+    }
+  }, [receiptModalOpen]);
 
   // Filter products based on search term
   const filteredProducts = useMemo(() =>
@@ -138,26 +145,63 @@ const CashierInterface: React.FC = () => {
         staffName: enabled ? staffName : ''
       }
     });
-  };
-  // Handle staff name change
-  const handleStaffNameChange = (value: string) => {
+  };  // Handle staff name change
+  const handleStaffNameChange = async (value: string) => {
     setStaffName(value);
 
-    // Find the selected staff member to get their water bottle allowances
-    const staff = staffList.find(s => s.name === value);
-    setSelectedStaff(staff || null);
-
-    if (state.currentOrder.staffDiscount) {
-      dispatch({
-        type: 'SET_STAFF_DISCOUNT',
-        payload: {
-          enabled: true,
-          staffName: value,
-          staffId: staff?.id
-        }
-      });
+    // If staff name is cleared, reset the selected staff
+    if (!value) {
+      setSelectedStaff(null);
+      return;
     }
-  };    // Calculate preview of final totals with water bottle allowances
+
+    // Define the staff type
+    type StaffType = {
+      id: string;
+      name: string;
+      Large_bottles: number;
+      Small_bottles: number;
+    };
+
+    // First refresh staff data to get the most up-to-date allowances
+    try {
+      const updatedStaffList = await refreshStaffData();
+
+      // Find the selected staff member with the latest data
+      const staff = updatedStaffList.find((s: StaffType) => s.name === value) ||
+        staffList.find((s: StaffType) => s.name === value);
+
+      setSelectedStaff(staff || null);
+
+      if (state.currentOrder.staffDiscount) {
+        dispatch({
+          type: 'SET_STAFF_DISCOUNT',
+          payload: {
+            enabled: true,
+            staffName: value,
+            staffId: staff?.id
+          }
+        });
+      }
+    } catch (error) {
+      console.error('Error updating staff data:', error);
+
+      // Fallback to current staff list if refresh fails
+      const staff = staffList.find((s: { id: string; name: string }) => s.name === value);
+      setSelectedStaff(staff || null);
+
+      if (state.currentOrder.staffDiscount && staff) {
+        dispatch({
+          type: 'SET_STAFF_DISCOUNT',
+          payload: {
+            enabled: true,
+            staffName: value,
+            staffId: staff?.id
+          }
+        });
+      }
+    }
+  };// Calculate preview of final totals with water bottle allowances
   const calculatePreviewTotal = () => {
     const order = state.currentOrder;
     let total = 0;
@@ -264,12 +308,16 @@ const CashierInterface: React.FC = () => {
     if (order.staffDiscount && selectedStaff) {
       payload.staffName = staffName;
       payload.staffId = selectedStaff.id;
-    }
-    try {
+    } try {
       await createSale(payload);
+
       // Refresh products after sale to update stock
       const productsData = await getProducts();
       setProducts(productsData.filter((p: ProductItem) => p.isAvailable));
+
+      // Refresh staff data to get updated water bottle allowances
+      await refreshStaffData();
+
       dispatch({
         type: 'COMPLETE_ORDER',
         payload: {
@@ -277,15 +325,47 @@ const CashierInterface: React.FC = () => {
           freeBottleInfo
         }
       });
+
       setPaymentModalOpen(false);
       setReceiptModalOpen(true);
     } catch (e: any) {
       alert(e?.response?.data?.error || 'Payment failed');
     }
+  };  // Function to refresh staff data
+  const refreshStaffData = async () => {
+    try {
+      const staffData = await staffApi.getStaffList();
+      // Format staff data for dropdown
+      const formattedStaffList = staffData.map((staff: any) => ({
+        id: staff._id,
+        name: staff.name,
+        Large_bottles: staff.Large_bottles,
+        Small_bottles: staff.Small_bottles
+      }));
+      setStaffList(formattedStaffList);
+
+      // If a staff member is selected, update their water bottle allowance data
+      if (selectedStaff) {
+        const updatedStaff = formattedStaffList.find((staff: any) => staff.id === selectedStaff.id);
+        if (updatedStaff) {
+          setSelectedStaff(updatedStaff);
+        }
+      }
+
+      return formattedStaffList; // Return the list for use in other functions
+    } catch (error) {
+      console.error('Error refreshing staff data:', error);
+      return []; // Return empty array on error
+    }
   };
+
   // Handle closing receipt and resetting
   const handleCloseReceipt = () => {
     setReceiptModalOpen(false);
+
+    // Refresh the staff data to get the updated bottle allowances
+    refreshStaffData();
+
     setStaffName('');
     setPaymentMethod('Cash');
   };
@@ -726,7 +806,6 @@ const CashierInterface: React.FC = () => {
             <p className="text-gray-500 text-sm">{new Date().toLocaleString()}</p>
           </div>          <div className="space-y-2">            {state.completedOrders[state.completedOrders.length - 1]?.items.map((item, index) => {
             const isFreeItem = item.freeQuantity && item.freeQuantity > 0;
-            const paidQuantity = item.paidQuantity || item.quantity;
             const freeQuantity = item.freeQuantity || 0;
 
             // For display in the receipt, we want to show the full original price
