@@ -37,6 +37,14 @@ const saleItemSchema = new mongoose.Schema({
     subcategory: {
         type: String,
         required: false
+    },
+    freeQuantity: {
+        type: Number,
+        default: 0
+    },
+    paidQuantity: {
+        type: Number,
+        default: 0
     }
 });
 

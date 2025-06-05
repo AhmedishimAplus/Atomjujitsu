@@ -297,4 +297,71 @@ describe('Water Bottle Allowance System Tests', () => {
         expect(staffReport.largeBottlesFree).toBeGreaterThanOrEqual(2); // From our tests
         expect(staffReport.smallBottlesFree).toBeGreaterThanOrEqual(1); // From our tests
     });
+
+    it('should correctly handle multiple bottles with partial allowance', async () => {
+        // Reset staff allowances for this test
+        await Staff.findByIdAndUpdate(staffMember._id, {
+            Large_bottles: 2,
+            Small_bottles: 2
+        });
+
+        // Create a sale with multiple large and small water bottles (more than allowance)
+        const saleData = {
+            items: [
+                {
+                    productId: largeWaterBottle._id,
+                    name: largeWaterBottle.name,
+                    quantity: 4,
+                    regularPrice: largeWaterBottle.sellPrice,
+                    staffPrice: largeWaterBottle.staffPrice,
+                    priceUsed: largeWaterBottle.staffPrice
+                },
+                {
+                    productId: smallWaterBottle._id,
+                    name: smallWaterBottle.name,
+                    quantity: 4,
+                    regularPrice: smallWaterBottle.sellPrice,
+                    staffPrice: smallWaterBottle.staffPrice,
+                    priceUsed: smallWaterBottle.staffPrice
+                }
+            ],
+            subtotal: largeWaterBottle.staffPrice * 4 + smallWaterBottle.staffPrice * 4,
+            staffDiscount: true,
+            staffId: staffMember._id,
+            staffName: staffMember.name,
+            paymentMethod: 'Cash',
+            total: largeWaterBottle.staffPrice * 4 + smallWaterBottle.staffPrice * 4
+        };
+
+        const response = await request(app)
+            .post('/api/sales')
+            .set('Authorization', `Bearer ${authToken}`)
+            .send(saleData);
+
+        expect(response.status).toBe(201);
+        expect(response.body.largeWaterBottlesFree).toBe(2); // Only 2 should be free
+        expect(response.body.smallWaterBottlesFree).toBe(2); // Only 2 should be free
+
+        // Calculate expected total: 2 paid large bottles + 2 paid small bottles
+        const expectedTotal = (largeWaterBottle.staffPrice * 2) + (smallWaterBottle.staffPrice * 2);
+        expect(response.body.total).toBe(expectedTotal);
+
+        // Check for freeQuantity and paidQuantity in items
+        const largeBottleItem = response.body.items.find(
+            item => item.name === largeWaterBottle.name
+        );
+        const smallBottleItem = response.body.items.find(
+            item => item.name === smallWaterBottle.name
+        );
+
+        expect(largeBottleItem.freeQuantity).toBe(2);
+        expect(largeBottleItem.paidQuantity).toBe(2);
+        expect(smallBottleItem.freeQuantity).toBe(2);
+        expect(smallBottleItem.paidQuantity).toBe(2);
+
+        // Check that staff allowances were updated to zero
+        const updatedStaff = await Staff.findById(staffMember._id);
+        expect(updatedStaff.Large_bottles).toBe(0);
+        expect(updatedStaff.Small_bottles).toBe(0);
+    });
 });

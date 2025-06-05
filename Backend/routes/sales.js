@@ -222,19 +222,30 @@ router.post('/', [
                 });
 
                 // Calculate how many bottles can be covered by allowance
-                const freeBottles = Math.min(staff.Large_bottles, totalLargeBottles);
-
-                // Update staff's allowance
+                let freeBottles = Math.min(staff.Large_bottles, totalLargeBottles);
+                let freeBottlesRemaining = freeBottles;
+                sale.largeWaterBottlesFree = freeBottles;                // Update staff's allowance
                 if (freeBottles > 0) {
                     staff.Large_bottles -= freeBottles;
-                    sale.largeWaterBottlesFree = freeBottles;
 
                     // Update the sale items to reflect free bottles
                     for (const item of sale.items) {
-                        if (item.name.toLowerCase().includes('large water bottle')) {
-                            // Apply discount for free bottles (zero out the price for the free bottles)
-                            const discountAmount = item.priceUsed * Math.min(freeBottles, item.quantity);
-                            sale.total -= discountAmount;
+                        if (item.name.toLowerCase().includes('large water bottle') && freeBottlesRemaining > 0) {
+                            const freeBeveragesInThisItem = Math.min(freeBottlesRemaining, item.quantity);
+                            freeBottlesRemaining -= freeBeveragesInThisItem;
+
+                            // Calculate the discount and apply it to the total
+                            const regularPrice = item.regularPrice || item.priceUsed;
+                            const discountAmount = regularPrice * freeBeveragesInThisItem;
+
+                            // Ensure total doesn't go below zero by limiting the discount
+                            const safeDiscountAmount = Math.min(discountAmount, sale.total);
+                            sale.total -= safeDiscountAmount;
+                            sale.subtotal -= safeDiscountAmount; // Update subtotal as well to match total
+
+                            // Store original price and quantity information for reference
+                            item.freeQuantity = freeBeveragesInThisItem;
+                            item.paidQuantity = item.quantity - freeBeveragesInThisItem;
                         }
                     }
                 }
@@ -246,19 +257,30 @@ router.post('/', [
                 });
 
                 // Calculate how many bottles can be covered by allowance
-                const freeBottles = Math.min(staff.Small_bottles, totalSmallBottles);
-
-                // Update staff's allowance
+                let freeBottles = Math.min(staff.Small_bottles, totalSmallBottles);
+                let freeBottlesRemaining = freeBottles;
+                sale.smallWaterBottlesFree = freeBottles;                // Update staff's allowance
                 if (freeBottles > 0) {
                     staff.Small_bottles -= freeBottles;
-                    sale.smallWaterBottlesFree = freeBottles;
 
                     // Update the sale items to reflect free bottles
                     for (const item of sale.items) {
-                        if (item.name.toLowerCase().includes('small water bottle')) {
-                            // Apply discount for free bottles (zero out the price for the free bottles)
-                            const discountAmount = item.priceUsed * Math.min(freeBottles, item.quantity);
-                            sale.total -= discountAmount;
+                        if (item.name.toLowerCase().includes('small water bottle') && freeBottlesRemaining > 0) {
+                            const freeBeveragesInThisItem = Math.min(freeBottlesRemaining, item.quantity);
+                            freeBottlesRemaining -= freeBeveragesInThisItem;
+
+                            // Calculate the discount and apply it to the total
+                            const regularPrice = item.regularPrice || item.priceUsed;
+                            const discountAmount = regularPrice * freeBeveragesInThisItem;
+
+                            // Ensure total doesn't go below zero by limiting the discount
+                            const safeDiscountAmount = Math.min(discountAmount, sale.total);
+                            sale.total -= safeDiscountAmount;
+                            sale.subtotal -= safeDiscountAmount; // Update subtotal as well to match total
+
+                            // Store original price and quantity information for reference
+                            item.freeQuantity = freeBeveragesInThisItem;
+                            item.paidQuantity = item.quantity - freeBeveragesInThisItem;
                         }
                     }
                 }
