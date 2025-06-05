@@ -157,7 +157,7 @@ const CashierInterface: React.FC = () => {
         }
       });
     }
-  };  // Calculate preview of final totals with water bottle allowances
+  };    // Calculate preview of final totals with water bottle allowances
   const calculatePreviewTotal = () => {
     const order = state.currentOrder;
     let total = 0;
@@ -195,7 +195,9 @@ const CashierInterface: React.FC = () => {
     } else {
       // No staff discount, calculate normal total
       total = order.items.reduce((sum, item) => sum + item.price * item.quantity, 0);
-    }    // Ensure total is never negative
+    }
+
+    // Ensure total is never negative
     return Math.max(0, total);
   };
   // Handle payment
@@ -722,34 +724,45 @@ const CashierInterface: React.FC = () => {
           <div className="text-center border-b border-gray-200 pb-4">
             <h3 className="font-bold text-xl">RECEIPT</h3>
             <p className="text-gray-500 text-sm">{new Date().toLocaleString()}</p>
-          </div>          <div className="space-y-2">
-            {state.completedOrders[state.completedOrders.length - 1]?.items.map((item, index) => {
-              const isFreeItem = item.freeQuantity && item.freeQuantity > 0;
-              const paidQuantity = item.paidQuantity || item.quantity;
-              const freeQuantity = item.freeQuantity || 0;
+          </div>          <div className="space-y-2">            {state.completedOrders[state.completedOrders.length - 1]?.items.map((item, index) => {
+            const isFreeItem = item.freeQuantity && item.freeQuantity > 0;
+            const paidQuantity = item.paidQuantity || item.quantity;
+            const freeQuantity = item.freeQuantity || 0;
 
-              return (
-                <div key={index} className="flex justify-between">
-                  <span>
-                    {item.name} x{item.quantity}
-                    {isFreeItem && <span className="text-green-600 text-xs ml-1">({freeQuantity} free)</span>}
-                  </span>
-                  <span>{formatCurrency(item.price * paidQuantity)}</span>
-                </div>
-              );
-            })}
-          </div>
+            // For display in the receipt, we want to show the full original price
+            // but we need to identify whether the item is partially/fully free
+            const displayAmount = item.price * item.quantity;
 
-          <div className="border-t border-gray-200 pt-2 mt-2">
-            {state.completedOrders[state.completedOrders.length - 1]?.staffDiscount && (
-              <div className="flex justify-between text-blue-600 text-sm">
-                <span>Staff Discount</span>
-                <span>Applied</span>
+            return (
+              <div key={index} className="flex justify-between">
+                <span>
+                  {item.name} x{item.quantity}
+                  {isFreeItem && <span className="text-green-600 text-xs ml-1">({freeQuantity} free)</span>}
+                </span>
+                <span>{formatCurrency(displayAmount)}</span>
               </div>
-            )}            <div className="flex justify-between font-bold mt-2">
+            );
+          })}
+          </div>          <div className="border-t border-gray-200 pt-2 mt-2">
+            {state.completedOrders[state.completedOrders.length - 1]?.staffDiscount && (
+              <>
+                <div className="flex justify-between text-blue-600 text-sm">
+                  <span>Staff Discount</span>
+                  <span>Applied</span>
+                </div>
+
+                {/* Display water bottle allowance info */}
+                {(state.completedOrders[state.completedOrders.length - 1]?.items.some(item =>
+                  item.name.toLowerCase().includes('water bottle') && item.freeQuantity)) && (
+                    <div className="text-green-600 text-sm mt-1">
+                      <span>Water Bottle Allowance Applied</span>
+                    </div>
+                  )}
+              </>
+            )}<div className="flex justify-between font-bold mt-2">
               <span>TOTAL</span>
               <span>
-                {formatCurrency(calculatePreviewTotal())}
+                {formatCurrency(state.completedOrders[state.completedOrders.length - 1]?.total || 0)}
               </span>
             </div>
             <div className="flex justify-between text-sm text-gray-500 mt-1">

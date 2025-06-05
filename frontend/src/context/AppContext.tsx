@@ -214,20 +214,29 @@ function appReducer(state: AppState, action: AppAction): AppState {
           }
           return item;
         });
-      }
+      }      // Calculate the actual total based on free bottle info
+      const calculatedTotal = itemsWithFreeBottleInfo.reduce((total, item) => {
+        // If this item has free quantity info, only count the paid portion
+        if (item.freeQuantity) {
+          return total + (item.paidQuantity * item.price);
+        }
+        // Otherwise count the full amount
+        return total + (item.quantity * item.price);
+      }, 0);
 
       const completedOrder: Order = {
         ...state.currentOrder,
         items: itemsWithFreeBottleInfo,
         paymentMethod,
         timestamp: new Date(),
-        completed: true
+        completed: true,
+        total: calculatedTotal // Use the calculated total instead
       };      // Create transaction record
       const transaction: Transaction = {
         id: generateId(),
         orderId: completedOrder.id,
-        total: completedOrder.total,
-        displayAmount: completedOrder.total, // Add displayAmount to match backend
+        total: calculatedTotal,
+        displayAmount: calculatedTotal, // Add displayAmount to match backend
         paymentMethod,
         timestamp: new Date(),
         staffDiscount: completedOrder.staffDiscount,
