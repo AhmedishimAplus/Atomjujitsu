@@ -151,7 +151,7 @@ const InventoryManagement: React.FC = () => {
       // Only include costPrice if owner is Quarter
       if (formData.owner === 'Quarter') {
         payload.costPrice = parseFloat(formData.costPrice);
-      } 
+      }
 
       if (editingProduct) {
         await updateProduct(editingProduct._id, payload);
@@ -442,34 +442,115 @@ const InventoryManagement: React.FC = () => {
                   Actions
                 </th>
               </tr>
-              </thead>              <tbody className="bg-white divide-y divide-gray-200">
-                {filteredProducts.map((product) => (
-                  <tr key={product._id} className="hover:bg-gray-50 transition-colors">
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="font-medium text-gray-900">{product.name}</div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
+              </thead>              <tbody className="bg-white divide-y divide-gray-200">                {filteredProducts.map((product) => (
+                <tr
+                  key={product._id}
+                  className={`hover:bg-gray-50 transition-colors ${product.stock === 0 ? 'bg-red-100' : ''}`}
+                >
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <div className="font-medium text-gray-900">{product.name}</div>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <div className="flex items-center">
+                      <span className="text-sm text-gray-900 min-w-[40px]">
+                        {product.categoryId?.name || 'N/A'}
+                      </span>
+                    </div>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <div className="flex items-center">
+                      <span className="text-sm text-gray-900 min-w-[40px]">
+                        {product.subcategory || 'N/A'}
+                      </span>
+                    </div>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <div className="flex items-center">
+                      <span className="text-sm text-gray-900 min-w-[40px]">
+                        {product.owner || 'Quarter'}
+                      </span>
+                    </div>
+                  </td>                    <td className="px-6 py-4 whitespace-nowrap">
+                    {editableField && editableField.productId === product._id && editableField.field === 'staffPrice' ? (
                       <div className="flex items-center">
-                        <span className="text-sm text-gray-900 min-w-[40px]">
-                          {product.categoryId?.name || 'N/A'}
-                        </span>
+                        <input
+                          type="number"
+                          className="w-20 px-2 py-1 border rounded text-sm"
+                          value={editableField.value}
+                          onChange={handleFieldChange}
+                          onBlur={() => handleSaveField(product._id)}
+                          onKeyDown={(e) => handleKeyDown(e, product._id)}
+                          step="0.01"
+                          min="0"
+                          autoFocus
+                        />
                       </div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
+                    ) : (
+                      <div className="flex items-center text-sm text-gray-900 group">                          <button
+                        className="opacity-0 group-hover:opacity-100 w-5 h-5 flex items-center justify-center rounded-full mr-1 text-gray-500 hover:text-white hover:bg-red-500 transition-all"
+                        onClick={() => handleDecrement(product._id, 'staffPrice', product.staffPrice)}
+                      >
+                        -
+                      </button>
+
+                        <span
+                          className="cursor-pointer min-w-[40px] text-center"
+                          onDoubleClick={() => handleStartEditing(product._id, 'staffPrice', product.staffPrice)}
+                        >
+                          {product.staffPrice}
+                        </span>
+
+                        <button
+                          className="opacity-0 group-hover:opacity-100 w-5 h-5 flex items-center justify-center rounded-full ml-1 text-gray-500 hover:text-white hover:bg-green-500 transition-all"
+                          onClick={() => handleIncrement(product._id, 'staffPrice', product.staffPrice)}
+                        >
+                          +
+                        </button>
+                      </div>
+                    )}
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    {editableField && editableField.productId === product._id && editableField.field === 'sellPrice' ? (
                       <div className="flex items-center">
-                        <span className="text-sm text-gray-900 min-w-[40px]">
-                          {product.subcategory || 'N/A'}
-                        </span>
+                        <input
+                          type="number"
+                          className="w-20 px-2 py-1 border rounded text-sm"
+                          value={editableField.value}
+                          onChange={handleFieldChange}
+                          onBlur={() => handleSaveField(product._id)}
+                          onKeyDown={(e) => handleKeyDown(e, product._id)}
+                          step="0.01"
+                          min="0"
+                          autoFocus
+                        />
                       </div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="flex items-center">
-                        <span className="text-sm text-gray-900 min-w-[40px]">
-                          {product.owner || 'Quarter'}
+                    ) : (
+                      <div className="flex items-center text-sm text-gray-900 group">                          <button
+                        className="opacity-0 group-hover:opacity-100 w-5 h-5 flex items-center justify-center rounded-full mr-1 text-gray-500 hover:text-white hover:bg-red-500 transition-all"
+                        onClick={() => handleDecrement(product._id, 'sellPrice', product.sellPrice)}
+                      >
+                        -
+                      </button>
+
+                        <span
+                          className="cursor-pointer min-w-[40px] text-center"
+                          onDoubleClick={() => handleStartEditing(product._id, 'sellPrice', product.sellPrice)}
+                        >
+                          {product.sellPrice}
                         </span>
+
+                        <button
+                          className="opacity-0 group-hover:opacity-100 w-5 h-5 flex items-center justify-center rounded-full ml-1 text-gray-500 hover:text-white hover:bg-green-500 transition-all"
+                          onClick={() => handleIncrement(product._id, 'sellPrice', product.sellPrice)}
+                        >
+                          +
+                        </button>
                       </div>
-                    </td>                    <td className="px-6 py-4 whitespace-nowrap">
-                      {editableField && editableField.productId === product._id && editableField.field === 'staffPrice' ? (
+                    )}
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    {product.owner === 'Quarter' ? (
+                      editableField && editableField.productId === product._id && editableField.field === 'costPrice' ? (
                         <div className="flex items-center">
                           <input
                             type="number"
@@ -484,170 +565,89 @@ const InventoryManagement: React.FC = () => {
                           />
                         </div>
                       ) : (
-                        <div className="flex items-center text-sm text-gray-900 group">                          <button
+                        <div className="flex items-center text-sm text-gray-900 group">                            <button
                           className="opacity-0 group-hover:opacity-100 w-5 h-5 flex items-center justify-center rounded-full mr-1 text-gray-500 hover:text-white hover:bg-red-500 transition-all"
-                          onClick={() => handleDecrement(product._id, 'staffPrice', product.staffPrice)}
+                          onClick={() => handleDecrement(product._id, 'costPrice', product.costPrice || 0)}
                         >
                           -
                         </button>
 
                           <span
                             className="cursor-pointer min-w-[40px] text-center"
-                            onDoubleClick={() => handleStartEditing(product._id, 'staffPrice', product.staffPrice)}
+                            onDoubleClick={() => handleStartEditing(product._id, 'costPrice', product.costPrice || 0)}
                           >
-                            {product.staffPrice}
+                            {product.costPrice || 0}
                           </span>
 
                           <button
                             className="opacity-0 group-hover:opacity-100 w-5 h-5 flex items-center justify-center rounded-full ml-1 text-gray-500 hover:text-white hover:bg-green-500 transition-all"
-                            onClick={() => handleIncrement(product._id, 'staffPrice', product.staffPrice)}
+                            onClick={() => handleIncrement(product._id, 'costPrice', product.costPrice || 0)}
                           >
                             +
                           </button>
-                        </div>
-                      )}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      {editableField && editableField.productId === product._id && editableField.field === 'sellPrice' ? (
-                        <div className="flex items-center">
-                          <input
-                            type="number"
-                            className="w-20 px-2 py-1 border rounded text-sm"
-                            value={editableField.value}
-                            onChange={handleFieldChange}
-                            onBlur={() => handleSaveField(product._id)}
-                            onKeyDown={(e) => handleKeyDown(e, product._id)}
-                            step="0.01"
-                            min="0"
-                            autoFocus
-                          />
-                        </div>
-                      ) : (
-                        <div className="flex items-center text-sm text-gray-900 group">                          <button
-                          className="opacity-0 group-hover:opacity-100 w-5 h-5 flex items-center justify-center rounded-full mr-1 text-gray-500 hover:text-white hover:bg-red-500 transition-all"
-                          onClick={() => handleDecrement(product._id, 'sellPrice', product.sellPrice)}
-                        >
-                          -
-                        </button>
-
-                          <span
-                            className="cursor-pointer min-w-[40px] text-center"
-                            onDoubleClick={() => handleStartEditing(product._id, 'sellPrice', product.sellPrice)}
-                          >
-                            {product.sellPrice}
-                          </span>
-
-                          <button
-                            className="opacity-0 group-hover:opacity-100 w-5 h-5 flex items-center justify-center rounded-full ml-1 text-gray-500 hover:text-white hover:bg-green-500 transition-all"
-                            onClick={() => handleIncrement(product._id, 'sellPrice', product.sellPrice)}
-                          >
-                            +
-                          </button>
-                        </div>
-                      )}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      {product.owner === 'Quarter' ? (
-                        editableField && editableField.productId === product._id && editableField.field === 'costPrice' ? (
-                          <div className="flex items-center">
-                            <input
-                              type="number"
-                              className="w-20 px-2 py-1 border rounded text-sm"
-                              value={editableField.value}
-                              onChange={handleFieldChange}
-                              onBlur={() => handleSaveField(product._id)}
-                              onKeyDown={(e) => handleKeyDown(e, product._id)}
-                              step="0.01"
-                              min="0"
-                              autoFocus
-                            />
-                          </div>
-                        ) : (
-                          <div className="flex items-center text-sm text-gray-900 group">                            <button
-                            className="opacity-0 group-hover:opacity-100 w-5 h-5 flex items-center justify-center rounded-full mr-1 text-gray-500 hover:text-white hover:bg-red-500 transition-all"
-                            onClick={() => handleDecrement(product._id, 'costPrice', product.costPrice || 0)}
-                          >
-                            -
-                          </button>
-
-                            <span
-                              className="cursor-pointer min-w-[40px] text-center"
-                              onDoubleClick={() => handleStartEditing(product._id, 'costPrice', product.costPrice || 0)}
-                            >
-                              {product.costPrice || 0}
-                            </span>
-
-                            <button
-                              className="opacity-0 group-hover:opacity-100 w-5 h-5 flex items-center justify-center rounded-full ml-1 text-gray-500 hover:text-white hover:bg-green-500 transition-all"
-                              onClick={() => handleIncrement(product._id, 'costPrice', product.costPrice || 0)}
-                            >
-                              +
-                            </button>
-                          </div>)) : (
-                        <div className="flex items-center justify-center">
-                          <span className="min-w-[40px] text-center px-2 py-1 rounded-md bg-gray-100 text-gray-500 font-medium border border-gray-200">N/A</span>
-                        </div>
-                      )}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      {editableField && editableField.productId === product._id && editableField.field === 'stock' ? (
-                        <div className="flex items-center">
-                          <input
-                            type="number"
-                            className="w-20 px-2 py-1 border rounded text-sm"
-                            value={editableField.value}
-                            onChange={handleFieldChange}
-                            onBlur={() => handleSaveField(product._id)}
-                            onKeyDown={(e) => handleKeyDown(e, product._id)}
-                            step="1"
-                            min="0"
-                            autoFocus
-                          />
-                        </div>
-                      ) : (
-                        <div className="flex items-center text-sm text-gray-900 group">                          <button
-                          className="opacity-0 group-hover:opacity-100 w-5 h-5 flex items-center justify-center rounded-full mr-1 text-gray-500 hover:text-white hover:bg-red-500 transition-all"
-                          onClick={() => handleDecrement(product._id, 'stock', product.stock)}
-                        >
-                          -
-                        </button>
-
-                          <span
-                            className="cursor-pointer min-w-[40px] text-center"
-                            onDoubleClick={() => handleStartEditing(product._id, 'stock', product.stock)}
-                          >
-                            {product.stock}
-                          </span>
-
-                          <button
-                            className="opacity-0 group-hover:opacity-100 w-5 h-5 flex items-center justify-center rounded-full ml-1 text-gray-500 hover:text-white hover:bg-green-500 transition-all"
-                            onClick={() => handleIncrement(product._id, 'stock', product.stock)}
-                          >
-                            +
-                          </button>
-                        </div>
-                      )}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => handleOpenProductModal(product)}
-                        className="text-blue-600 hover:text-blue-800 mr-2"
+                        </div>)) : (
+                      <div className="flex items-center justify-center">
+                        <span className="min-w-[40px] text-center px-2 py-1 rounded-md bg-gray-100 text-gray-500 font-medium border border-gray-200">N/A</span>
+                      </div>
+                    )}
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    {editableField && editableField.productId === product._id && editableField.field === 'stock' ? (
+                      <div className="flex items-center">
+                        <input
+                          type="number"
+                          className="w-20 px-2 py-1 border rounded text-sm"
+                          value={editableField.value}
+                          onChange={handleFieldChange}
+                          onBlur={() => handleSaveField(product._id)}
+                          onKeyDown={(e) => handleKeyDown(e, product._id)}
+                          step="1"
+                          min="0"
+                          autoFocus
+                        />
+                      </div>
+                    ) : (
+                      <div className="flex items-center text-sm text-gray-900 group">                          <button
+                        className="opacity-0 group-hover:opacity-100 w-5 h-5 flex items-center justify-center rounded-full mr-1 text-gray-500 hover:text-white hover:bg-red-500 transition-all"
+                        onClick={() => handleDecrement(product._id, 'stock', product.stock)}
                       >
-                        <Edit size={16} />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => handleOpenDeleteModal(product)}
-                        className="text-red-600 hover:text-red-800"
+                        -
+                      </button>                          <span
+                        className={`cursor-pointer min-w-[40px] text-center ${product.stock === 0 ? 'font-bold text-red-600' : ''}`}
+                        onDoubleClick={() => handleStartEditing(product._id, 'stock', product.stock)}
                       >
-                        <Trash2 size={16} />
-                      </Button>
-                    </td>
-                  </tr>
-                ))}
+                          {product.stock === 0 ? 'OUT OF STOCK' : product.stock}
+                        </span>
+
+                        <button
+                          className="opacity-0 group-hover:opacity-100 w-5 h-5 flex items-center justify-center rounded-full ml-1 text-gray-500 hover:text-white hover:bg-green-500 transition-all"
+                          onClick={() => handleIncrement(product._id, 'stock', product.stock)}
+                        >
+                          +
+                        </button>
+                      </div>
+                    )}
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => handleOpenProductModal(product)}
+                      className="text-blue-600 hover:text-blue-800 mr-2"
+                    >
+                      <Edit size={16} />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => handleOpenDeleteModal(product)}
+                      className="text-red-600 hover:text-red-800"
+                    >
+                      <Trash2 size={16} />
+                    </Button>
+                  </td>
+                </tr>
+              ))}
               </tbody>
             </table>
           </div>
