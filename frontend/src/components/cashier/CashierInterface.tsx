@@ -198,19 +198,62 @@ const CashierInterface: React.FC = () => {
     }    // Ensure total is never negative
     return Math.max(0, total);
   };
-
   // Handle payment
   const handlePayment = async () => {
     // Prepare payload for backend
-    const order = state.currentOrder; const payload: any = {
-      items: order.items.map(item => ({
+    const order = state.currentOrder;
+    
+    // Calculate free water bottle quantities
+    interface BottleInfo {
+      productId: string;
+      freeQuantity: number;
+      paidQuantity: number;
+    }
+    
+    const freeBottleInfo: BottleInfo[] = [];
+    const items = order.items.map(item => {
+      const itemData: any = {
         productId: item.productId,
         name: item.name,
         quantity: item.quantity,
         regularPrice: item.regularPrice ?? item.price, // fallback if not present
         staffPrice: item.staffPrice ?? item.price, // fallback if not present
         priceUsed: item.price,
-      })),
+      };
+      
+      // Calculate free vs. paid quantities for water bottles
+      if (order.staffDiscount && selectedStaff) {
+        const isLargeWaterBottle = item.name.toLowerCase().includes('large water bottle');
+        const isSmallWaterBottle = item.name.toLowerCase().includes('small water bottle');
+        
+        if (isLargeWaterBottle && selectedStaff.Large_bottles > 0) {
+          const freeCount = Math.min(selectedStaff.Large_bottles, item.quantity);
+          itemData.freeQuantity = freeCount;
+          itemData.paidQuantity = item.quantity - freeCount;
+          
+          freeBottleInfo.push({
+            productId: item.productId,
+            freeQuantity: freeCount,
+            paidQuantity: item.quantity - freeCount
+          });
+        } else if (isSmallWaterBottle && selectedStaff.Small_bottles > 0) {
+          const freeCount = Math.min(selectedStaff.Small_bottles, item.quantity);
+          itemData.freeQuantity = freeCount;
+          itemData.paidQuantity = item.quantity - freeCount;
+          
+          freeBottleInfo.push({
+            productId: item.productId,
+            freeQuantity: freeCount,
+            paidQuantity: item.quantity - freeCount
+          });
+        }
+      }
+      
+      return itemData;
+    });
+    
+    const payload: any = {
+      items,
       subtotal: calculatePreviewTotal(),
       staffDiscount: order.staffDiscount,
       paymentMethod,
@@ -228,7 +271,8 @@ const CashierInterface: React.FC = () => {
       dispatch({
         type: 'COMPLETE_ORDER',
         payload: {
-          paymentMethod
+          paymentMethod,
+          freeBottleInfo
         }
       });
       setPaymentModalOpen(false);
@@ -678,17 +722,22 @@ const CashierInterface: React.FC = () => {
           <div className="text-center border-b border-gray-200 pb-4">
             <h3 className="font-bold text-xl">RECEIPT</h3>
             <p className="text-gray-500 text-sm">{new Date().toLocaleString()}</p>
-          </div>
-
-          <div className="space-y-2">
-            {state.completedOrders[state.completedOrders.length - 1]?.items.map((item, index) => (
-              <div key={index} className="flex justify-between">
-                <span>
-                  {item.name} x{item.quantity}
-                </span>
-                <span>{formatCurrency(item.price * item.quantity)}</span>
-              </div>
-            ))}
+          </div>          <div className="space-y-2">
+            {state.completedOrders[state.completedOrders.length - 1]?.items.map((item, index) => {
+              const isFreeItem = item.freeQuantity && item.freeQuantity > 0;
+              const paidQuantity = item.paidQuantity || item.quantity;
+              const freeQuantity = item.freeQuantity || 0;
+              
+              return (
+                <div key={index} className="flex justify-between">
+                  <span>
+                    {item.name} x{item.quantity}
+                    {isFreeItem && <span className="text-green-600 text-xs ml-1">({freeQuantity} free)</span>}
+                  </span>
+                  <span>{formatCurrency(item.price * paidQuantity)}</span>
+                </div>
+              );
+            })}
           </div>
 
           <div className="border-t border-gray-200 pt-2 mt-2">
@@ -697,11 +746,10 @@ const CashierInterface: React.FC = () => {
                 <span>Staff Discount</span>
                 <span>Applied</span>
               </div>
-            )}
-            <div className="flex justify-between font-bold mt-2">
+            )}            <div className="flex justify-between font-bold mt-2">
               <span>TOTAL</span>
               <span>
-                {formatCurrency(state.completedOrders[state.completedOrders.length - 1]?.total || 0)}
+                {formatCurrency(calculatePreviewTotal())}
               </span>
             </div>
             <div className="flex justify-between text-sm text-gray-500 mt-1">

@@ -21,6 +21,8 @@ export interface OrderItem {
   quantity: number;
   regularPrice?: number;
   staffPrice?: number;
+  freeQuantity?: number;
+  paidQuantity?: number;
 }
 
 export interface Order {
@@ -47,6 +49,7 @@ export type Transaction = {
   id: string;
   orderId: string;
   total: number;
+  displayAmount?: number; // Add displayAmount field to match backend
   paymentMethod: 'InstaPay' | 'Cash';
   timestamp: Date;
   staffDiscount: boolean;

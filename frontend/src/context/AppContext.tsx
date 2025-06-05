@@ -20,7 +20,7 @@ type AppAction =
   | { type: 'ADD_TO_ORDER'; payload: { product: ProductItem; quantity: number; isStaffPrice: boolean } } | { type: 'REMOVE_FROM_ORDER'; payload: string }
   | { type: 'UPDATE_ORDER_ITEM_QUANTITY'; payload: { productId: string; quantity: number } }
   | { type: 'SET_STAFF_DISCOUNT'; payload: { enabled: boolean; staffName?: string; staffId?: string } }
-  | { type: 'COMPLETE_ORDER'; payload: { paymentMethod: 'InstaPay' | 'Cash' } }
+  | { type: 'COMPLETE_ORDER'; payload: { paymentMethod: 'InstaPay' | 'Cash'; freeBottleInfo?: { productId: string; freeQuantity: number; paidQuantity: number }[] } }
   | { type: 'RESET_ORDER' }
   | { type: 'ADD_PRODUCT'; payload: ProductItem }
   | { type: 'UPDATE_PRODUCT'; payload: ProductItem }
@@ -196,19 +196,38 @@ function appReducer(state: AppState, action: AppAction): AppState {
     }
 
     case 'COMPLETE_ORDER': {
-      const { paymentMethod } = action.payload;
+      const { paymentMethod, freeBottleInfo } = action.payload;
+      
+      // Copy the items with free bottle information if provided
+      let itemsWithFreeBottleInfo = [...state.currentOrder.items];
+      
+      if (freeBottleInfo) {
+        // Update items with free bottle information
+        itemsWithFreeBottleInfo = state.currentOrder.items.map(item => {
+          const bottleInfo = freeBottleInfo.find(info => info.productId === item.productId);
+          if (bottleInfo) {
+            return {
+              ...item,
+              freeQuantity: bottleInfo.freeQuantity,
+              paidQuantity: bottleInfo.paidQuantity
+            };
+          }
+          return item;
+        });
+      }
+      
       const completedOrder: Order = {
         ...state.currentOrder,
+        items: itemsWithFreeBottleInfo,
         paymentMethod,
         timestamp: new Date(),
         completed: true
-      };
-
-      // Create transaction record
+      };      // Create transaction record
       const transaction: Transaction = {
         id: generateId(),
         orderId: completedOrder.id,
         total: completedOrder.total,
+        displayAmount: completedOrder.total, // Add displayAmount to match backend
         paymentMethod,
         timestamp: new Date(),
         staffDiscount: completedOrder.staffDiscount,

@@ -47,17 +47,18 @@ router.get('/staff/:staffId/recent-purchases', auth, async (req, res) => {
         })
             .sort({ createdAt: -1 })
             .limit(5)
-            .lean();
-
-        // Format the response
+            .lean();        // Format the response
         const formattedPurchases = recentPurchases.map(purchase => ({
             _id: purchase._id,
             date: purchase.createdAt,
             total: purchase.total,
+            displayAmount: purchase.total > 0 ? purchase.total : purchase.subtotal, // Use subtotal if total is 0
             items: purchase.items.map(item => ({
                 name: item.name,
                 quantity: item.quantity,
-                price: item.priceUsed
+                price: item.priceUsed,
+                freeQuantity: item.freeQuantity || 0,
+                paidQuantity: item.paidQuantity || item.quantity
             })),
             paymentMethod: purchase.paymentMethod,
             largeWaterBottlesFree: purchase.largeWaterBottlesFree || 0,
@@ -75,7 +76,17 @@ router.get('/staff/:staffId/recent-purchases', auth, async (req, res) => {
 router.get('/staff-purchases', auth, async (req, res) => {
     try {
         const salesStaff = await Sale.find({ staffDiscount: true, staffId: { $exists: true, $ne: null } }).sort({ createdAt: -1 }).lean();
-        return res.json(salesStaff);
+        
+        // Make sure we display the proper amount even with free water bottles
+        const formattedSalesStaff = salesStaff.map(sale => {
+            // If the total is zero but subtotal isn't, use the original total before water bottle discounts
+            if (sale.total === 0 && sale.subtotal > 0) {
+                return { ...sale, displayAmount: sale.subtotal };
+            }
+            return { ...sale, displayAmount: sale.total };
+        });
+        
+        return res.json(formattedSalesStaff);
     }
     catch (error) {
         return res.status(500).json({ error: error.message });

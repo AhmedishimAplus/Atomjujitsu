@@ -401,11 +401,12 @@ const StaffManagement: React.FC = () => {
                     {recentPurchases[staff.id].length === 0 ? (
                       <div className="text-sm text-gray-500 italic">No recent purchases</div>
                     ) : (
-                      <div className="space-y-1">
-                        {recentPurchases[staff.id].map((purchase, index) => (
+                      <div className="space-y-1">                        {recentPurchases[staff.id].map((purchase, index) => (
                           <div key={index} className="flex justify-between text-sm text-gray-600">
-                            <span>{formatDate(purchase.createdAt)}</span>
-                            <span className="font-medium">${purchase.total.toFixed(2)}</span>
+                            <span>{formatDate(purchase.date)}</span>
+                            <span className="font-medium">
+                              ${(purchase.displayAmount !== undefined ? purchase.displayAmount : purchase.total).toFixed(2)}
+                            </span>
                           </div>
                         ))}
                       </div>
@@ -477,10 +478,9 @@ const StaffManagement: React.FC = () => {
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap">
                           <div className="text-sm text-gray-500">{purchase.paymentMethod}</div>
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-right">
+                        </td>                        <td className="px-6 py-4 whitespace-nowrap text-right">
                           <div className="text-sm font-medium text-gray-900">
-                            ${purchase.total.toFixed(2)}
+                            ${(purchase.displayAmount !== undefined ? purchase.displayAmount : purchase.total).toFixed(2)}
                           </div>
                         </td>
                       </tr>
