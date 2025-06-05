@@ -151,7 +151,7 @@ const InventoryManagement: React.FC = () => {
       // Only include costPrice if owner is Quarter
       if (formData.owner === 'Quarter') {
         payload.costPrice = parseFloat(formData.costPrice);
-      } console.log('Submitting payload:', payload);
+      } 
 
       if (editingProduct) {
         await updateProduct(editingProduct._id, payload);

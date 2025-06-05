@@ -33,13 +33,13 @@ router.get('/', auth, async (req, res) => {
     }
 });
 router.get('/staff-purchases', auth, async (req, res) => {
-   try{
-    const salesStaff=await Sale.find({staffDiscount:true,staffId:{$exists:true,$ne:null}}).sort({createdAt:-1}).lean();
-    return res.json(salesStaff);
-   }
-   catch(error){
-    return res.status(500).json({error:error.message});
-   }
+    try {
+        const salesStaff = await Sale.find({ staffDiscount: true, staffId: { $exists: true, $ne: null } }).sort({ createdAt: -1 }).lean();
+        return res.json(salesStaff);
+    }
+    catch (error) {
+        return res.status(500).json({ error: error.message });
+    }
 });
 
 
@@ -1173,51 +1173,51 @@ router.get('/profit/:period', auth, async (req, res) => {
 
 // Get last 3 purchases for a specific staff member
 router.get('/staff-purchases/:staffId/recent', auth, async (req, res) => {
-   try {
-      const { staffId } = req.params;
-      
-      // Check if staffId is valid MongoDB ObjectId
-      if (!staffId.match(/^[0-9a-fA-F]{24}$/)) {
-         return res.status(400).json({ 
-            error: 'Invalid staff ID format',
-            message: 'Staff ID must be a 24-character hexadecimal string'
-         });
-      }
-      
-      // Find the last 3 purchases for this staff
-      const recentPurchases = await Sale.find({
-         staffDiscount: true, 
-         staffId: staffId
-      })
-      .sort({ createdAt: -1 })
-      .limit(3)
-      .populate('staffId', 'name Large_bottles Small_bottles')
-      .lean();
-      
-      // Format the response
-      const formattedPurchases = recentPurchases.map(purchase => {
-         const { _id, staffName, paymentMethod, total, createdAt, items, staffId } = purchase;
-         
-         return {
-            _id,
-            staffName,
-            paymentMethod,
-            total,
-            createdAt,
-            items,
-            staffId: staffId ? staffId._id : null,
-            staffDetails: staffId ? {
-               name: staffId.name,
-               largeBottles: staffId.Large_bottles,
-               smallBottles: staffId.Small_bottles
-            } : null
-         };
-      });
-      
-      return res.json(formattedPurchases);
-   } catch (error) {
-      return res.status(500).json({ error: error.message });
-   }
+    try {
+        const { staffId } = req.params;
+
+        // Check if staffId is valid MongoDB ObjectId
+        if (!staffId.match(/^[0-9a-fA-F]{24}$/)) {
+            return res.status(400).json({
+                error: 'Invalid staff ID format',
+                message: 'Staff ID must be a 24-character hexadecimal string'
+            });
+        }
+
+        // Find the last 3 purchases for this staff
+        const recentPurchases = await Sale.find({
+            staffDiscount: true,
+            staffId: staffId
+        })
+            .sort({ createdAt: -1 })
+            .limit(3)
+            .populate('staffId', 'name Large_bottles Small_bottles')
+            .lean();
+
+        // Format the response
+        const formattedPurchases = recentPurchases.map(purchase => {
+            const { _id, staffName, paymentMethod, total, createdAt, items, staffId } = purchase;
+
+            return {
+                _id,
+                staffName,
+                paymentMethod,
+                total,
+                createdAt,
+                items,
+                staffId: staffId ? staffId._id : null,
+                staffDetails: staffId ? {
+                    name: staffId.name,
+                    largeBottles: staffId.Large_bottles,
+                    smallBottles: staffId.Small_bottles
+                } : null
+            };
+        });
+
+        return res.json(formattedPurchases);
+    } catch (error) {
+        return res.status(500).json({ error: error.message });
+    }
 });
 
 
