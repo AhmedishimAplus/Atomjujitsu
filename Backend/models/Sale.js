@@ -55,8 +55,7 @@ const saleSchema = new mongoose.Schema({
         type: mongoose.Schema.Types.ObjectId,
         ref: 'Staff',
         required: false
-    },
-    staffName: {
+    }, staffName: {
         type: String,
         required: false
     },
@@ -67,6 +66,14 @@ const saleSchema = new mongoose.Schema({
     smallWaterBottle: {
         type: Boolean,
         default: false
+    },
+    largeWaterBottlesFree: {
+        type: Number,
+        default: 0
+    },
+    smallWaterBottlesFree: {
+        type: Number,
+        default: 0
     },
     paymentMethod: {
         type: String,

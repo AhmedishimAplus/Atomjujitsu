@@ -32,6 +32,46 @@ router.get('/', auth, async (req, res) => {
         res.status(500).json({ error: error.message });
     }
 });
+router.get('/staff/:staffId/recent-purchases', auth, async (req, res) => {
+    try {
+        const { staffId } = req.params;
+
+        // Validate staffId
+        if (!mongoose.Types.ObjectId.isValid(staffId)) {
+            return res.status(400).json({ error: 'Invalid staff ID format' });
+        }
+
+        // Get the most recent purchases for this staff member
+        const recentPurchases = await Sale.find({
+            staffId: staffId
+        })
+            .sort({ createdAt: -1 })
+            .limit(5)
+            .lean();
+
+        // Format the response
+        const formattedPurchases = recentPurchases.map(purchase => ({
+            _id: purchase._id,
+            date: purchase.createdAt,
+            total: purchase.total,
+            items: purchase.items.map(item => ({
+                name: item.name,
+                quantity: item.quantity,
+                price: item.priceUsed
+            })),
+            paymentMethod: purchase.paymentMethod,
+            largeWaterBottlesFree: purchase.largeWaterBottlesFree || 0,
+            smallWaterBottlesFree: purchase.smallWaterBottlesFree || 0
+        }));
+
+        return res.json(formattedPurchases);
+    } catch (error) {
+        console.error('Error fetching staff recent purchases:', error);
+        return res.status(500).json({ error: error.message });
+    }
+});
+
+// Get staff purchases
 router.get('/staff-purchases', auth, async (req, res) => {
     try {
         const salesStaff = await Sale.find({ staffDiscount: true, staffId: { $exists: true, $ne: null } }).sort({ createdAt: -1 }).lean();
@@ -164,25 +204,66 @@ router.post('/', [
                 // Update product stock
                 product.stock = Math.max(0, product.stock - item.quantity);
                 await product.save();
+            }            // Update staff water bottle allowances and adjust pricing
+            // Find water bottle items in the purchase
+            const largeWaterBottleItems = items.filter(item => {
+                const productName = item.name.toLowerCase();
+                return productName.includes('large water bottle');
+            });
+
+            const smallWaterBottleItems = items.filter(item => {
+                const productName = item.name.toLowerCase();
+                return productName.includes('small water bottle');
+            });            // Process large water bottles
+            if (largeWaterBottleItems.length > 0) {
+                let totalLargeBottles = 0;
+                largeWaterBottleItems.forEach(item => {
+                    totalLargeBottles += item.quantity;
+                });
+
+                // Calculate how many bottles can be covered by allowance
+                const freeBottles = Math.min(staff.Large_bottles, totalLargeBottles);
+
+                // Update staff's allowance
+                if (freeBottles > 0) {
+                    staff.Large_bottles -= freeBottles;
+                    sale.largeWaterBottlesFree = freeBottles;
+
+                    // Update the sale items to reflect free bottles
+                    for (const item of sale.items) {
+                        if (item.name.toLowerCase().includes('large water bottle')) {
+                            // Apply discount for free bottles (zero out the price for the free bottles)
+                            const discountAmount = item.priceUsed * Math.min(freeBottles, item.quantity);
+                            sale.total -= discountAmount;
+                        }
+                    }
+                }
+            }            // Process small water bottles
+            if (smallWaterBottleItems.length > 0) {
+                let totalSmallBottles = 0;
+                smallWaterBottleItems.forEach(item => {
+                    totalSmallBottles += item.quantity;
+                });
+
+                // Calculate how many bottles can be covered by allowance
+                const freeBottles = Math.min(staff.Small_bottles, totalSmallBottles);
+
+                // Update staff's allowance
+                if (freeBottles > 0) {
+                    staff.Small_bottles -= freeBottles;
+                    sale.smallWaterBottlesFree = freeBottles;
+
+                    // Update the sale items to reflect free bottles
+                    for (const item of sale.items) {
+                        if (item.name.toLowerCase().includes('small water bottle')) {
+                            // Apply discount for free bottles (zero out the price for the free bottles)
+                            const discountAmount = item.priceUsed * Math.min(freeBottles, item.quantity);
+                            sale.total -= discountAmount;
+                        }
+                    }
+                }
             }
 
-            // Update staff water bottle allowances
-            if (hasLargeWaterBottle) {
-                if (staff.Large_bottles > 0) {
-                    staff.Large_bottles--;
-                    sale.largeWaterBottle = true;
-                } else {
-                    return res.status(400).json({ error: 'Staff large water bottle allowance exceeded' });
-                }
-            }
-            if (hasSmallWaterBottle) {
-                if (staff.Small_bottles > 0) {
-                    staff.Small_bottles--;
-                    sale.smallWaterBottle = true;
-                } else {
-                    return res.status(400).json({ error: 'Staff small water bottle allowance exceeded' });
-                }
-            }
             await staff.save();
         } else {
             // If not a staff sale, update all product stock levels and calculate Sharoofa amount

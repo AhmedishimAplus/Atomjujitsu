@@ -17,11 +17,11 @@ const CashierInterface: React.FC = () => {
   const { state, dispatch } = useAppContext();
   const [searchTerm, setSearchTerm] = useState('');
   const [paymentModalOpen, setPaymentModalOpen] = useState(false);
-  const [receiptModalOpen, setReceiptModalOpen] = useState(false); const [paymentMethod, setPaymentMethod] = useState<'InstaPay' | 'Cash'>('Cash');
-  const [staffName, setStaffName] = useState('');
+  const [receiptModalOpen, setReceiptModalOpen] = useState(false); const [paymentMethod, setPaymentMethod] = useState<'InstaPay' | 'Cash'>('Cash'); const [staffName, setStaffName] = useState('');
+  const [selectedStaff, setSelectedStaff] = useState<any>(null);
   const [products, setProducts] = useState<ProductItem[]>([]);
   const [categories, setCategories] = useState<any[]>([]);
-  const [staffList, setStaffList] = useState<{ id: string; name: string }[]>([]);
+  const [staffList, setStaffList] = useState<{ id: string; name: string; Large_bottles: number; Small_bottles: number }[]>([]);
   // Fetch products, categories, and staff on component mount
   useEffect(() => {
     const fetchData = async () => {
@@ -32,12 +32,12 @@ const CashierInterface: React.FC = () => {
           staffApi.getStaffList()
         ]);
         setProducts(productsData.filter((p: ProductItem) => p.isAvailable));
-        setCategories(categoriesData);
-
-        // Format staff data for dropdown
+        setCategories(categoriesData);        // Format staff data for dropdown
         const formattedStaffList = staffData.map((staff: any) => ({
           id: staff._id,
-          name: staff.name
+          name: staff.name,
+          Large_bottles: staff.Large_bottles,
+          Small_bottles: staff.Small_bottles
         }));
         setStaffList(formattedStaffList);
       } catch (error) {
@@ -123,12 +123,12 @@ const CashierInterface: React.FC = () => {
         quantity: newQuantity
       }
     });
-  };
-  // Handle staff discount toggle
+  };  // Handle staff discount toggle
   const handleStaffDiscountToggle = (enabled: boolean) => {
     if (!enabled) {
       // Reset staff name when disabling discount
       setStaffName('');
+      setSelectedStaff(null);
     }
 
     dispatch({
@@ -142,17 +142,22 @@ const CashierInterface: React.FC = () => {
   // Handle staff name change
   const handleStaffNameChange = (value: string) => {
     setStaffName(value);
+
+    // Find the selected staff member to get their water bottle allowances
+    const staff = staffList.find(s => s.name === value);
+    setSelectedStaff(staff || null);
+
     if (state.currentOrder.staffDiscount) {
       dispatch({
         type: 'SET_STAFF_DISCOUNT',
         payload: {
           enabled: true,
-          staffName: value
+          staffName: value,
+          staffId: staff?.id
         }
       });
     }
   };
-
   // Handle payment
   const handlePayment = async () => {
     // Prepare payload for backend
@@ -171,8 +176,9 @@ const CashierInterface: React.FC = () => {
       paymentMethod,
       total: order.total,
     };
-    if (order.staffDiscount) {
+    if (order.staffDiscount && selectedStaff) {
       payload.staffName = staffName;
+      payload.staffId = selectedStaff.id;
     }
     try {
       await createSale(payload);
@@ -284,18 +290,45 @@ const CashierInterface: React.FC = () => {
                 No items in order yet
               </div>
             ) : (
-              <div className="space-y-4">
-                {state.currentOrder.items.map((item) => (
+              <div className="space-y-4">                {state.currentOrder.items.map((item) => {
+                // Check if this is a water bottle and if staff member has allowances
+                const isLargeWaterBottle = item.name.toLowerCase().includes('large water bottle');
+                const isSmallWaterBottle = item.name.toLowerCase().includes('small water bottle');
+                const isWaterBottle = isLargeWaterBottle || isSmallWaterBottle;
+
+                // Determine free bottle count based on staff allowance
+                let freeBottleCount = 0;
+                if (state.currentOrder.staffDiscount && selectedStaff) {
+                  if (isLargeWaterBottle) {
+                    freeBottleCount = Math.min(selectedStaff.Large_bottles, item.quantity);
+                  } else if (isSmallWaterBottle) {
+                    freeBottleCount = Math.min(selectedStaff.Small_bottles, item.quantity);
+                  }
+                }
+
+                return (
                   <div key={item.productId} className="flex items-center justify-between border-b border-gray-100 pb-3">
                     <div className="flex-1">
                       <div className="font-medium">{item.name}</div>
                       <div className="text-sm text-gray-500">
                         ${item.price.toFixed(2)} × {item.quantity}
+                        {freeBottleCount > 0 && (
+                          <span className="ml-1 text-green-600 font-medium">
+                            ({freeBottleCount} free)
+                          </span>
+                        )}
                       </div>
                     </div>
                     <div className="flex items-center space-x-2">
-                      <div className="text-right font-medium">
-                        ${(item.price * item.quantity).toFixed(2)}
+                      <div className="text-right">
+                        <div className="font-medium">
+                          ${((item.quantity - freeBottleCount) * item.price).toFixed(2)}
+                        </div>
+                        {freeBottleCount > 0 && (
+                          <div className="text-xs text-green-600">
+                            {freeBottleCount} × $0.00
+                          </div>
+                        )}
                       </div>
                       <div className="flex flex-col space-y-1">
                         <Button
@@ -323,7 +356,8 @@ const CashierInterface: React.FC = () => {
                       </Button>
                     </div>
                   </div>
-                ))}
+                );
+              })}
               </div>
             )}
           </CardBody>
@@ -340,17 +374,84 @@ const CashierInterface: React.FC = () => {
                   {formatCurrency(state.currentOrder.total)}
                 </p>
               </div>              {state.currentOrder.staffDiscount && (
-                <Select
-                  options={[
-                    { value: '', label: '-- Select Staff --' },
-                    ...staffList.map(staff => ({ value: staff.name, label: staff.name }))
-                  ]}
-                  label="Staff Name"
-                  value={staffName}
-                  onChange={handleStaffNameChange}
-                  fullWidth
-                />
-              )}              <div className="flex space-x-2">
+                <>
+                  <Select
+                    options={[
+                      { value: '', label: '-- Select Staff --' },
+                      ...staffList.map(staff => ({ value: staff.name, label: staff.name }))
+                    ]}
+                    label="Staff Name"
+                    value={staffName}
+                    onChange={handleStaffNameChange}
+                    fullWidth
+                  />
+                  {staffName && selectedStaff && (
+                    <div className="bg-white p-3 rounded-md border border-gray-200 mt-2">
+                      <div className="text-sm font-medium text-gray-800 mb-2">Water Bottle Allowance</div>
+
+                      {/* Large Water Bottles */}
+                      <div className="flex justify-between text-sm mb-1">
+                        <span className="text-gray-600">Large Bottles:</span>
+                        <span className="font-medium">{selectedStaff.Large_bottles} / 2</span>
+                      </div>
+                      <div className="w-full bg-gray-200 rounded-full h-2 mb-1">
+                        <div
+                          className="bg-blue-600 h-2 rounded-full"
+                          style={{ width: `${(selectedStaff.Large_bottles / 2) * 100}%` }}
+                        ></div>
+                      </div>
+
+                      {/* Show how many large bottles will be used from allowance in this order */}
+                      {state.currentOrder.items.some(item => item.name.toLowerCase().includes('large water bottle')) && (
+                        <div className="text-xs mb-3 flex justify-between">
+                          <span className="text-gray-500">In this order:</span>
+                          {(() => {
+                            const largeBottleItem = state.currentOrder.items.find(
+                              item => item.name.toLowerCase().includes('large water bottle')
+                            );
+                            const count = largeBottleItem ? Math.min(largeBottleItem.quantity, selectedStaff.Large_bottles) : 0;
+                            return (
+                              <span className={count > 0 ? "text-green-600 font-medium" : "text-gray-500"}>
+                                {count > 0 ? `${count} bottle${count > 1 ? 's' : ''} free` : 'No free bottles'}
+                              </span>
+                            );
+                          })()}
+                        </div>
+                      )}
+
+                      {/* Small Water Bottles */}
+                      <div className="flex justify-between text-sm mb-1">
+                        <span className="text-gray-600">Small Bottles:</span>
+                        <span className="font-medium">{selectedStaff.Small_bottles} / 2</span>
+                      </div>
+                      <div className="w-full bg-gray-200 rounded-full h-2 mb-1">
+                        <div
+                          className="bg-teal-600 h-2 rounded-full"
+                          style={{ width: `${(selectedStaff.Small_bottles / 2) * 100}%` }}
+                        ></div>
+                      </div>
+
+                      {/* Show how many small bottles will be used from allowance in this order */}
+                      {state.currentOrder.items.some(item => item.name.toLowerCase().includes('small water bottle')) && (
+                        <div className="text-xs mb-1 flex justify-between">
+                          <span className="text-gray-500">In this order:</span>
+                          {(() => {
+                            const smallBottleItem = state.currentOrder.items.find(
+                              item => item.name.toLowerCase().includes('small water bottle')
+                            );
+                            const count = smallBottleItem ? Math.min(smallBottleItem.quantity, selectedStaff.Small_bottles) : 0;
+                            return (
+                              <span className={count > 0 ? "text-green-600 font-medium" : "text-gray-500"}>
+                                {count > 0 ? `${count} bottle${count > 1 ? 's' : ''} free` : 'No free bottles'}
+                              </span>
+                            );
+                          })()}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </>
+              )}<div className="flex space-x-2">
                 <Button
                   variant="outline"
                   fullWidth
@@ -418,12 +519,43 @@ const CashierInterface: React.FC = () => {
             <div className="flex justify-between mb-2">
               <span className="font-medium">Subtotal:</span>
               <span>{formatCurrency(state.currentOrder.total)}</span>
-            </div>
-            {state.currentOrder.staffDiscount && (
-              <div className="flex justify-between mb-2 text-blue-600">
-                <span className="font-medium">Staff Discount:</span>
-                <span>Applied</span>
-              </div>
+            </div>            {state.currentOrder.staffDiscount && (
+              <>
+                <div className="flex justify-between mb-2 text-blue-600">
+                  <span className="font-medium">Staff Discount:</span>
+                  <span>Applied</span>
+                </div>
+                {selectedStaff && staffName && (
+                  <div className="mb-2 text-gray-700 bg-gray-50 p-2 rounded-md">
+                    <div className="text-sm font-semibold mb-1">Water Bottle Allowance:</div>
+                    {state.currentOrder.items.some(item => item.name.toLowerCase().includes('large water bottle')) && (
+                      <div className="flex justify-between text-sm mb-1">
+                        <span>Large Bottles:</span>
+                        <span>{selectedStaff.Large_bottles} remaining</span>
+                      </div>
+                    )}
+                    {state.currentOrder.items.some(item => item.name.toLowerCase().includes('small water bottle')) && (
+                      <div className="flex justify-between text-sm">
+                        <span>Small Bottles:</span>
+                        <span>{selectedStaff.Small_bottles} remaining</span>
+                      </div>
+                    )}                    {selectedStaff.Large_bottles > 0 && state.currentOrder.items.some(item =>
+                      item.name.toLowerCase().includes('large water bottle')
+                    ) && (
+                        <div className="mt-1 text-sm text-green-600 font-medium">
+                          {selectedStaff.Large_bottles} free large water bottle{selectedStaff.Large_bottles > 1 ? 's' : ''} will be applied
+                        </div>
+                      )}
+                    {selectedStaff.Small_bottles > 0 && state.currentOrder.items.some(item =>
+                      item.name.toLowerCase().includes('small water bottle')
+                    ) && (
+                        <div className="text-sm text-green-600 font-medium">
+                          {selectedStaff.Small_bottles} free small water bottle{selectedStaff.Small_bottles > 1 ? 's' : ''} will be applied
+                        </div>
+                      )}
+                  </div>
+                )}
+              </>
             )}
             <div className="flex justify-between font-bold text-lg mt-2 pt-2 border-t border-gray-200">
               <span>Total:</span>

@@ -11,16 +11,15 @@ type AppState = {
   transactions: Transaction[];
   expenses: Expense[];
   activeView: 'cashier' | 'admin';
-  adminTab: 'inventory' | 'financial' | 'analytics' | 'staff';
+  adminTab: 'inventory' | 'financial' | 'analytics' | 'staff' | 'water-bottles';
 };
 
 type AppAction =
   | { type: 'SET_VIEW'; payload: 'cashier' | 'admin' }
-  | { type: 'SET_ADMIN_TAB'; payload: 'inventory' | 'financial' | 'analytics' | 'staff' }
-  | { type: 'ADD_TO_ORDER'; payload: { product: ProductItem; quantity: number; isStaffPrice: boolean } }
-  | { type: 'REMOVE_FROM_ORDER'; payload: string }
+  | { type: 'SET_ADMIN_TAB'; payload: 'inventory' | 'financial' | 'analytics' | 'staff' | 'water-bottles' }
+  | { type: 'ADD_TO_ORDER'; payload: { product: ProductItem; quantity: number; isStaffPrice: boolean } } | { type: 'REMOVE_FROM_ORDER'; payload: string }
   | { type: 'UPDATE_ORDER_ITEM_QUANTITY'; payload: { productId: string; quantity: number } }
-  | { type: 'SET_STAFF_DISCOUNT'; payload: { enabled: boolean; staffName?: string } }
+  | { type: 'SET_STAFF_DISCOUNT'; payload: { enabled: boolean; staffName?: string; staffId?: string } }
   | { type: 'COMPLETE_ORDER'; payload: { paymentMethod: 'InstaPay' | 'Cash' } }
   | { type: 'RESET_ORDER' }
   | { type: 'ADD_PRODUCT'; payload: ProductItem }

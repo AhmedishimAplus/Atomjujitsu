@@ -100,6 +100,24 @@ export const getStaffPurchases = async (params?: {
   return response.data;
 };
 
+// Water Bottle Reports
+export const getWaterBottleUsage = async (startDate?: string, endDate?: string) => {
+  const response = await api.get('/reports/water-bottle-usage', {
+    params: { startDate, endDate }
+  });
+  return response.data;
+};
+
+export const getStaffWaterBottleUsage = async (staffId: string) => {
+  const response = await api.get(`/reports/staff/${staffId}/water-bottle-usage`);
+  return response.data;
+};
+
+export const getStaffRecentPurchases = async (staffId: string) => {
+  const response = await api.get(`/sales/staff/${staffId}/recent-purchases`);
+  return response.data;
+};
+
 export const getRecentStaffPurchases = async (staffId: string) => {
   const response = await api.get(`/sales/staff-purchases/${staffId}/recent`);
   return response.data;
