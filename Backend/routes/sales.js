@@ -896,6 +896,7 @@ router.get('/totals/month', auth, async (req, res) => {
         // Calculate total sales excluding Sharoofa products
         let totalSales = 0;
         let sharoofaTotal = 0;
+        let freeWaterBottleTotal = 0;
 
         // Process each sale
         for (const sale of sales) {
@@ -906,7 +907,22 @@ router.get('/totals/month', auth, async (req, res) => {
             if (sale.sharoofaAmount) {
                 sharoofaTotal += sale.sharoofaAmount;
             }
-        }        // Total sales excluding Sharoofa products
+        }
+
+        // Track free water bottles but don't subtract from total sales
+        for (const sale of sales) {
+            for (const item of sale.items) {
+                if (item.productId && item.freeQuantity > 0) {
+                    const product = await Product.findById(item.productId).lean();
+                    if (product) {
+                        const sellPrice = item.priceUsed || 0;
+                        freeWaterBottleTotal += sellPrice * item.freeQuantity;
+                    }
+                }
+            }
+        }
+
+        // Total sales excluding only Sharoofa products (keep free water bottles in total)
         const nonSharoofaTotal = totalSales - sharoofaTotal;
 
         // Calculate profit from sales (excluding Sharoofa)
@@ -920,7 +936,21 @@ router.get('/totals/month', auth, async (req, res) => {
                     if (product && product.owner !== 'Sharoofa') {
                         const costPrice = product.costPrice || 0;
                         const sellPrice = item.priceUsed || 0;
-                        totalProfit += (sellPrice - costPrice) * item.quantity;
+
+                        // Check if item has free quantity due to water bottle allowance
+                        const freeQty = item.freeQuantity || 0;
+                        const paidQty = item.paidQuantity || (item.quantity - freeQty) || item.quantity;
+
+                        if (freeQty > 0) {
+                            // For paid portion: normal profit calculation
+                            const paidProfit = (sellPrice - costPrice) * paidQty;
+                            // For free portion: profit is negative sell price (since we give it for free but paid full price)
+                            const freeProfit = -sellPrice * freeQty;
+                            totalProfit += paidProfit + freeProfit;
+                        } else {
+                            // Normal calculation for non-free items
+                            totalProfit += (sellPrice - costPrice) * item.quantity;
+                        }
                     }
                 }
             }
@@ -964,6 +994,7 @@ router.get('/totals/week', auth, async (req, res) => {
         // Calculate total sales excluding Sharoofa products
         let totalSales = 0;
         let sharoofaTotal = 0;
+        let freeWaterBottleTotal = 0;
 
         // Process each sale
         for (const sale of sales) {
@@ -974,7 +1005,22 @@ router.get('/totals/week', auth, async (req, res) => {
             if (sale.sharoofaAmount) {
                 sharoofaTotal += sale.sharoofaAmount;
             }
-        }        // Total sales excluding Sharoofa products
+        }
+
+        // Track free water bottles but don't subtract from total sales
+        for (const sale of sales) {
+            for (const item of sale.items) {
+                if (item.productId && item.freeQuantity > 0) {
+                    const product = await Product.findById(item.productId).lean();
+                    if (product) {
+                        const sellPrice = item.priceUsed || 0;
+                        freeWaterBottleTotal += sellPrice * item.freeQuantity;
+                    }
+                }
+            }
+        }
+
+        // Total sales excluding only Sharoofa products (keep free water bottles in total)
         const nonSharoofaTotal = totalSales - sharoofaTotal;
 
         // Calculate profit from sales (excluding Sharoofa)
@@ -988,7 +1034,21 @@ router.get('/totals/week', auth, async (req, res) => {
                     if (product && product.owner !== 'Sharoofa') {
                         const costPrice = product.costPrice || 0;
                         const sellPrice = item.priceUsed || 0;
-                        totalProfit += (sellPrice - costPrice) * item.quantity;
+
+                        // Check if item has free quantity due to water bottle allowance
+                        const freeQty = item.freeQuantity || 0;
+                        const paidQty = item.paidQuantity || (item.quantity - freeQty) || item.quantity;
+
+                        if (freeQty > 0) {
+                            // For paid portion: normal profit calculation
+                            const paidProfit = (sellPrice - costPrice) * paidQty;
+                            // For free portion: profit is negative sell price (since we give it for free but paid full price)
+                            const freeProfit = -sellPrice * freeQty;
+                            totalProfit += paidProfit + freeProfit;
+                        } else {
+                            // Normal calculation for non-free items
+                            totalProfit += (sellPrice - costPrice) * item.quantity;
+                        }
                     }
                 }
             }
@@ -1248,6 +1308,7 @@ router.get('/profit/:period', auth, async (req, res) => {
         let totalProfit = 0;
         let totalSales = 0;
         let sharoofaTotal = 0;
+        let freeWaterBottleTotal = 0;
         let processedItems = 0;
         let errorCount = 0;
 
@@ -1262,7 +1323,22 @@ router.get('/profit/:period', auth, async (req, res) => {
             }
         }
 
-        // Calculate non-Sharoofa total
+        // Track free water bottles but don't subtract from total sales
+        for (const sale of sales) {
+            if (!sale.items || !Array.isArray(sale.items)) continue;
+
+            for (const item of sale.items) {
+                if (item && item.productId && item.freeQuantity > 0) {
+                    const product = await Product.findById(item.productId).lean();
+                    if (product) {
+                        const sellPrice = item.priceUsed || 0;
+                        freeWaterBottleTotal += sellPrice * item.freeQuantity;
+                    }
+                }
+            }
+        }
+
+        // Calculate non-Sharoofa total (keep free water bottles in total)
         const nonSharoofaTotal = totalSales - sharoofaTotal;
 
         // Get cost prices for products sold
@@ -1278,8 +1354,19 @@ router.get('/profit/:period', auth, async (req, res) => {
                             if (product && product.owner !== 'Sharoofa') {
                                 const costPrice = product.costPrice || 0;
                                 const sellPrice = item.priceUsed || 0;
-                                const quantity = item.quantity || 0;
-                                totalProfit += (sellPrice - costPrice) * quantity;
+
+                                // Check if item has free quantity due to water bottle allowance
+                                const freeQty = item.freeQuantity || 0;
+                                const paidQty = item.paidQuantity || (item.quantity - freeQty) || item.quantity || 0; if (freeQty > 0) {
+                                    // For paid portion: normal profit calculation
+                                    const paidProfit = (sellPrice - costPrice) * paidQty;
+                                    // For free portion: profit is negative sell price (since we give it for free but paid full price)
+                                    const freeProfit = -sellPrice * freeQty;
+                                    totalProfit += paidProfit + freeProfit;
+                                } else {
+                                    // Normal calculation for non-free items
+                                    totalProfit += (sellPrice - costPrice) * (item.quantity || 0);
+                                }
                             }
                         } catch (err) {
                             errorCount++;
