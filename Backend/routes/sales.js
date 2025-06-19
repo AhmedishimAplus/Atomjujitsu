@@ -47,23 +47,49 @@ router.get('/staff/:staffId/recent-purchases', auth, async (req, res) => {
         })
             .sort({ createdAt: -1 })
             .limit(5)
-            .lean();        // Format the response
-        const formattedPurchases = recentPurchases.map(purchase => ({
-            _id: purchase._id,
-            date: purchase.createdAt,
-            total: purchase.total,
-            displayAmount: purchase.total > 0 ? purchase.total : purchase.subtotal, // Use subtotal if total is 0
-            items: purchase.items.map(item => ({
-                name: item.name,
-                quantity: item.quantity,
-                price: item.priceUsed,
-                freeQuantity: item.freeQuantity || 0,
-                paidQuantity: item.paidQuantity || item.quantity
-            })),
-            paymentMethod: purchase.paymentMethod,
-            largeWaterBottlesFree: purchase.largeWaterBottlesFree || 0,
-            smallWaterBottlesFree: purchase.smallWaterBottlesFree || 0
-        }));
+            .lean();
+
+        // Format the response
+        const formattedPurchases = recentPurchases.map(purchase => {
+            // Calculate display amount including paid water bottles
+            let nonWaterBottleTotal = 0;
+            let paidWaterBottleTotal = 0;
+
+            // Process each item
+            if (purchase.items && Array.isArray(purchase.items)) {
+                for (const item of purchase.items) {
+                    if (item.name.toLowerCase().includes('water bottle')) {
+                        // For water bottles, only count paid ones
+                        if (item.paidQuantity > 0) {
+                            paidWaterBottleTotal += item.priceUsed * item.paidQuantity;
+                        }
+                    } else {
+                        // For non-water bottle items, count all
+                        nonWaterBottleTotal += item.priceUsed * item.quantity;
+                    }
+                }
+            }
+
+            // Total should include non-water items + paid water bottles
+            const displayAmount = nonWaterBottleTotal + paidWaterBottleTotal;
+
+            return {
+                _id: purchase._id,
+                date: purchase.createdAt,
+                total: displayAmount, // Update total to reflect the correct amount
+                displayAmount, // Add displayAmount for consistency
+                items: purchase.items.map(item => ({
+                    name: item.name,
+                    quantity: item.quantity,
+                    price: item.priceUsed,
+                    freeQuantity: item.freeQuantity || 0,
+                    paidQuantity: item.paidQuantity || item.quantity
+                })),
+                paymentMethod: purchase.paymentMethod,
+                largeWaterBottlesFree: purchase.largeWaterBottlesFree || 0,
+                smallWaterBottlesFree: purchase.smallWaterBottlesFree || 0
+            };
+        });
 
         return res.json(formattedPurchases);
     } catch (error) {
@@ -77,13 +103,35 @@ router.get('/staff-purchases', auth, async (req, res) => {
     try {
         const salesStaff = await Sale.find({ staffDiscount: true, staffId: { $exists: true, $ne: null } }).sort({ createdAt: -1 }).lean();
 
-        // Make sure we display the proper amount even with free water bottles
+        // Format sales with correct display amounts
         const formattedSalesStaff = salesStaff.map(sale => {
-            // If the total is zero but subtotal isn't, use the original total before water bottle discounts
-            if (sale.total === 0 && sale.subtotal > 0) {
-                return { ...sale, displayAmount: sale.subtotal };
+            // Calculate correct display amount including paid water bottles
+            let nonWaterBottleTotal = 0;
+            let paidWaterBottleTotal = 0;
+
+            // Process each item
+            if (sale.items && Array.isArray(sale.items)) {
+                for (const item of sale.items) {
+                    if (item.name.toLowerCase().includes('water bottle')) {
+                        // For water bottles, only count paid ones
+                        if (item.paidQuantity > 0) {
+                            paidWaterBottleTotal += item.priceUsed * item.paidQuantity;
+                        }
+                    } else {
+                        // For non-water bottle items, count all
+                        nonWaterBottleTotal += item.priceUsed * item.quantity;
+                    }
+                }
             }
-            return { ...sale, displayAmount: sale.total };
+
+            // Total should include non-water items + paid water bottles
+            const displayAmount = nonWaterBottleTotal + paidWaterBottleTotal;
+
+            return {
+                ...sale,
+                displayAmount,
+                total: displayAmount // Update total to be consistent
+            };
         });
 
         return res.json(formattedSalesStaff);
@@ -309,17 +357,25 @@ router.post('/', [
                         }
                     }
                 }
+            }            // Calculate the total including any paid water bottles (exceeding allowance)
+            let paidWaterBottleTotal = 0;
+
+            // Add paid water bottles (exceeding allowance) to the total
+            for (const item of sale.items) {
+                if ((item.name.toLowerCase().includes('water bottle')) && item.paidQuantity > 0) {
+                    paidWaterBottleTotal += item.priceUsed * item.paidQuantity;
+                }
             }
 
-            // Now apply the water bottle discount and calculate the final total with non-water bottle items
-            sale.total = Math.max(0, nonWaterBottleTotal);
+            // Final total = non-water bottle items + paid water bottles
+            sale.total = Math.max(0, nonWaterBottleTotal + paidWaterBottleTotal);
             sale.subtotal = sale.total;
 
             // For the purposes of record-keeping, we never want the total/subtotal to be 0 when there are paid items
-            if (sale.total === 0 && nonWaterBottleTotal > 0) {
-                console.log("Warning: Sale total was 0 but non-water bottle items were present.");
-                sale.total = nonWaterBottleTotal;
-                sale.subtotal = nonWaterBottleTotal;
+            if (sale.total === 0 && (nonWaterBottleTotal > 0 || paidWaterBottleTotal > 0)) {
+                console.log("Warning: Sale total was 0 but paid items were present.");
+                sale.total = nonWaterBottleTotal + paidWaterBottleTotal;
+                sale.subtotal = nonWaterBottleTotal + paidWaterBottleTotal;
             }
 
             await staff.save();
@@ -1422,20 +1478,53 @@ router.get('/staff-purchases/:staffId/recent', auth, async (req, res) => {
 
         // Format the response
         const formattedPurchases = recentPurchases.map(purchase => {
-            const { _id, staffName, paymentMethod, total, createdAt, items, staffId } = purchase;
+            const { _id, staffName, paymentMethod, total, subtotal, createdAt, items } = purchase;
+            const staffDetails = purchase.staffId;
+
+            // Calculate the correct display amount including paid water bottles
+            let displayAmount = total;
+
+            // Check if we need to calculate paid water bottles
+            let hasPaidWaterBottles = false;
+            let paidWaterBottleTotal = 0;
+
+            // Loop through items to find paid water bottles
+            if (items && Array.isArray(items)) {
+                for (const item of items) {
+                    if (item.name.toLowerCase().includes('water bottle') && item.paidQuantity > 0) {
+                        hasPaidWaterBottles = true;
+                        paidWaterBottleTotal += item.priceUsed * item.paidQuantity;
+                    }
+                }
+            }
+
+            // Calculate the correct display amount
+            // If there are non-water bottle items, ensure they're included in total
+            let nonWaterBottleTotal = 0;
+            if (items && Array.isArray(items)) {
+                for (const item of items) {
+                    if (!item.name.toLowerCase().includes('water bottle')) {
+                        nonWaterBottleTotal += item.priceUsed * item.quantity;
+                    }
+                }
+            }
+
+            // The display amount should include non-water bottle items + paid water bottles
+            displayAmount = nonWaterBottleTotal + paidWaterBottleTotal;
 
             return {
                 _id,
                 staffName,
                 paymentMethod,
-                total,
+                total: displayAmount, // Update total to reflect paid water bottles
+                displayAmount,
                 createdAt,
                 items,
-                staffId: staffId ? staffId._id : null,
-                staffDetails: staffId ? {
-                    name: staffId.name,
-                    largeBottles: staffId.Large_bottles,
-                    smallBottles: staffId.Small_bottles
+                staffId: staffDetails ? staffDetails._id : null,
+                staffDetails: staffDetails ? {
+                    name: staffDetails.name,
+                    largeBottles: staffDetails.Large_bottles,
+                    smallBottles: staffDetails.Small_bottles
                 } : null
             };
         });
