@@ -265,6 +265,98 @@ const FinancialTracking: React.FC = () => {
     });
   });
 
+  // Update profit cards with accurate profit calculation based on sales records
+  useEffect(() => {
+    if (sales.length > 0 && !backendTotalsLoading) {
+      // Get current date info
+      const now = new Date();
+      const currentMonth = now.getMonth();
+      const currentYear = now.getFullYear();
+      const today = now.getDate();
+      const dayOfWeek = now.getDay(); // 0 = Sunday, 6 = Saturday
+
+      // Calculate start of week (Sunday)
+      const startOfWeek = new Date(now);
+      startOfWeek.setDate(today - dayOfWeek);
+      startOfWeek.setHours(0, 0, 0, 0);
+
+      // Track totals
+      let monthlyProfit = 0;
+      let weeklyProfit = 0;
+
+      // Process each sale
+      sales.forEach(sale => {
+        const saleDate = new Date(sale.createdAt);
+        const isThisMonth = saleDate.getMonth() === currentMonth && saleDate.getFullYear() === currentYear;
+        const isThisWeek = saleDate >= startOfWeek;
+
+        if (sale.items && Array.isArray(sale.items)) {
+          // Calculate correct profit for this sale
+          sale.items.forEach((item: any) => {
+            if (item.productId) {
+              const product = products.find(p => p._id === item.productId);
+              if (product && product.owner !== 'Sharoofa') {
+                const costPrice = product.costPrice || 0;
+                const sellPrice = item.priceUsed || 0;
+                const freeQty = item.freeQuantity || 0;
+                const paidQty = item.paidQuantity || (item.quantity - freeQty) || item.quantity;
+
+                let itemProfit = 0;
+
+                if (freeQty > 0) {
+                  // If item is completely free
+                  if (item.freeQuantity === item.quantity) {
+                    itemProfit = -costPrice * item.quantity;
+                  } else {
+                    // Mixed free/paid
+                    const paidProfit = (sellPrice - costPrice) * paidQty;
+                    const freePortion = -costPrice * freeQty;
+                    itemProfit = paidProfit + freePortion;
+                  }
+                } else {
+                  // Regular item
+                  itemProfit = (sellPrice - costPrice) * item.quantity;
+                }
+
+                // Add to appropriate total
+                if (isThisMonth) {
+                  monthlyProfit += itemProfit;
+                }
+
+                if (isThisWeek) {
+                  weeklyProfit += itemProfit;
+                }
+              }
+            }
+          });
+        }
+      });
+
+      // Debug
+      console.log('Recalculated Monthly Profit:', monthlyProfit);
+      console.log('Recalculated Weekly Profit:', weeklyProfit);
+      console.log('Backend Monthly Profit:', backendMonthTotals?.totalProfit);
+      console.log('Backend Weekly Profit:', backendWeekTotals?.totalProfit);
+
+      // Update the UI if the calculated values differ significantly from backend values
+      if (backendMonthTotals && Math.abs(backendMonthTotals.totalProfit - monthlyProfit) > 0.01) {
+        console.log('Updating monthly profit display from:', backendMonthTotals.totalProfit, 'to:', monthlyProfit);
+        setBackendMonthTotals({
+          ...backendMonthTotals,
+          totalProfit: monthlyProfit
+        });
+      }
+
+      if (backendWeekTotals && Math.abs(backendWeekTotals.totalProfit - weeklyProfit) > 0.01) {
+        console.log('Updating weekly profit display from:', backendWeekTotals.totalProfit, 'to:', weeklyProfit);
+        setBackendWeekTotals({
+          ...backendWeekTotals,
+          totalProfit: weeklyProfit
+        });
+      }
+    }
+  }, [sales, products, backendMonthTotals, backendWeekTotals, backendTotalsLoading]);
+
   return (
     <div className="space-y-6">      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
       <h1 className="text-2xl font-bold text-gray-900">Financial Tracking</h1>
@@ -502,12 +594,13 @@ const FinancialTracking: React.FC = () => {
                     <p className="text-2xl font-bold text-blue-700">{formatCurrency(backendMonthTotals.totalSales)}</p>
                   </div>
                 </CardBody>
-              </Card>
-              <Card>
+              </Card>              <Card>
                 <CardBody className="p-4">
                   <div>
                     <p className="text-sm text-gray-500">Total Profit This Month</p>
-                    <p className="text-2xl font-bold text-green-700">{formatCurrency(backendMonthTotals.totalProfit)}</p>
+                    <p className={`text-2xl font-bold ${backendMonthTotals.totalProfit < 0 ? 'text-red-600' : 'text-green-700'}`}>
+                      {formatCurrency(backendMonthTotals.totalProfit)}
+                    </p>
                   </div>
                 </CardBody>
               </Card>
@@ -518,12 +611,13 @@ const FinancialTracking: React.FC = () => {
                     <p className="text-2xl font-bold text-blue-700">{formatCurrency(backendWeekTotals.totalSales)}</p>
                   </div>
                 </CardBody>
-              </Card>
-              <Card>
+              </Card>              <Card>
                 <CardBody className="p-4">
                   <div>
                     <p className="text-sm text-gray-500">Total Profit This Week</p>
-                    <p className="text-2xl font-bold text-green-700">{formatCurrency(backendWeekTotals.totalProfit)}</p>
+                    <p className={`text-2xl font-bold ${backendWeekTotals.totalProfit < 0 ? 'text-red-600' : 'text-green-700'}`}>
+                      {formatCurrency(backendWeekTotals.totalProfit)}
+                    </p>
                   </div>
                 </CardBody>
               </Card>
