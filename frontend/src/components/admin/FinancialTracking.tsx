@@ -584,19 +584,18 @@ const FinancialTracking: React.FC = () => {
                       // 1. For free items: set price to 0 and calculate profit (-cost)
                       // 2. For regular items: (price - cost) * quantity
                       let profit = 0;
-                      let displayPriceUsed = item.priceUsed;
-
-                      if (owner !== 'Sharoofa') {
+                      let displayPriceUsed = item.priceUsed;                      if (owner !== 'Sharoofa') {
                         if (hasFreeQuantity) {
-                          // For paid portion: normal profit calculation
-                          const paidProfit = (item.priceUsed - costPrice) * paidQty;
-                          // For free portion: price is 0, so profit is -costPrice per item
-                          const freePortion = -costPrice * freeQty;
-                          profit = paidProfit + freePortion;
-
-                          // Set display price to 0 for free items
+                          // For items that are completely free, show negative cost as profit
                           if (item.freeQuantity === item.quantity) {
+                            // For fully free water bottles, profit is negative cost
                             displayPriceUsed = 0;
+                            profit = -costPrice * item.quantity;
+                          } else {
+                            // For mixed free/paid items
+                            const paidProfit = (item.priceUsed - costPrice) * paidQty;
+                            const freePortion = -costPrice * freeQty;
+                            profit = paidProfit + freePortion;
                           }
                         } else {
                           // Regular profit calculation for non-free items
@@ -617,11 +616,10 @@ const FinancialTracking: React.FC = () => {
                         categoryName = cat ? cat.name : '';
                       } return (
                         <tr key={sale._id + '-' + idx}>
-                          <td className="px-6 py-4 whitespace-nowrap">{formatDate(sale.createdAt)}</td>
-                          <td className="px-6 py-4 whitespace-nowrap">
+                          <td className="px-6 py-4 whitespace-nowrap">{formatDate(sale.createdAt)}</td>                          <td className="px-6 py-4 whitespace-nowrap">
                             {item.name}
                             {(item.freeQuantity > 0) && (
-                              <span className="ml-1 text-green-600 text-xs font-medium">
+                              <span className="ml-1 text-green-600 text-xs font-medium water-bottle-free">
                                 ({item.freeQuantity} free)
                               </span>
                             )}
