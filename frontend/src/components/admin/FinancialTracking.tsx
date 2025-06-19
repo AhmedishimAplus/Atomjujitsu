@@ -627,28 +627,7 @@ const FinancialTracking: React.FC = () => {
             <CardHeader className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
               <h2 className="text-lg font-semibold text-gray-800">Sales Records</h2>
               <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
-                <Select
-                  options={[{ value: 'all', label: 'All Categories' }, ...categories.map(cat => ({ value: cat._id, label: cat.name }))]}
-                  value={selectedSalesCategory}
-                  onChange={setSelectedSalesCategory}
-                  className="w-full sm:w-48"
-                />
-                <Select
-                  options={[{ value: 'all', label: 'All Subcategories' }, ...(selectedSalesCategory !== 'all' ? (categories.find(cat => cat._id === selectedSalesCategory)?.subcategories || []).map((sub: any) => ({ value: sub.name, label: sub.name })) : [])]}
-                  value={selectedSalesSubcategory}
-                  onChange={setSelectedSalesSubcategory}
-                  className="w-full sm:w-48"
-                />
-                <Select
-                  options={[
-                    { value: 'all', label: 'All Time' },
-                    { value: 'thisMonth', label: 'This Month' },
-                    { value: 'lastMonth', label: 'Last Month' }
-                  ]}
-                  value={salesDateRange}
-                  onChange={setSalesDateRange}
-                  className="w-full sm:w-48"
-                />
+              
               </div>
             </CardHeader>
             <CardBody className="p-0">
