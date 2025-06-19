@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useReducer, useEffect } from 'react';
-import { ProductItem, Order, StaffMember, Transaction, Expense } from '../types';
+import { ProductItem, Order, StaffMember, Transaction, Expense, User } from '../types';
 import { shouldResetAllowance, generateId } from '../utils/helpers';
 import { sampleProducts, sampleStaffMembers, generateSampleTransactions, generateSampleExpenses } from '../data/sampleData';
 
@@ -12,12 +12,14 @@ type AppState = {
   expenses: Expense[];
   activeView: 'cashier' | 'admin';
   adminTab: 'inventory' | 'financial' | 'analytics' | 'staff' | 'water-bottles';
+  user: User | null;
 };
 
 type AppAction =
   | { type: 'SET_VIEW'; payload: 'cashier' | 'admin' }
   | { type: 'SET_ADMIN_TAB'; payload: 'inventory' | 'financial' | 'analytics' | 'staff' | 'water-bottles' }
-  | { type: 'ADD_TO_ORDER'; payload: { product: ProductItem; quantity: number; isStaffPrice: boolean } } | { type: 'REMOVE_FROM_ORDER'; payload: string }
+  | { type: 'ADD_TO_ORDER'; payload: { product: ProductItem; quantity: number; isStaffPrice: boolean } }
+  | { type: 'REMOVE_FROM_ORDER'; payload: string }
   | { type: 'UPDATE_ORDER_ITEM_QUANTITY'; payload: { productId: string; quantity: number } }
   | { type: 'SET_STAFF_DISCOUNT'; payload: { enabled: boolean; staffName?: string; staffId?: string } }
   | { type: 'COMPLETE_ORDER'; payload: { paymentMethod: 'InstaPay' | 'Cash'; freeBottleInfo?: { productId: string; freeQuantity: number; paidQuantity: number }[] } }
@@ -31,7 +33,8 @@ type AppAction =
   | { type: 'DELETE_STAFF'; payload: string }
   | { type: 'SET_STAFF_LIST'; payload: StaffMember[] }
   | { type: 'UPDATE_WATER_BOTTLE_ALLOWANCE'; payload: { staffId: string; type: 'large' | 'small'; newAmount: number } }
-  | { type: 'RESET_ALLOWANCES' };
+  | { type: 'RESET_ALLOWANCES' }
+  | { type: 'SET_USER'; payload: User | null };
 
 const initialOrder: Order = {
   id: generateId(),
@@ -52,7 +55,8 @@ const initialState: AppState = {
   transactions: generateSampleTransactions(),
   expenses: generateSampleExpenses(),
   activeView: 'cashier',
-  adminTab: 'inventory'
+  adminTab: 'inventory',
+  user: null
 };
 
 function appReducer(state: AppState, action: AppAction): AppState {
@@ -406,6 +410,14 @@ function appReducer(state: AppState, action: AppAction): AppState {
             small: 2
           }
         }))
+      };
+    }
+
+    // Set user
+    case 'SET_USER': {
+      return {
+        ...state,
+        user: action.payload
       };
     }
 

@@ -5,7 +5,7 @@ const auth = require('../middleware/auth');
 
 
 // Add expense 
-router.post('/', auth, async (req, res) => {
+router.post('/', [auth, require('../middleware/adminAuth')], async (req, res) => {
     try {
         const { description, amount, category, date } = req.body;
         const expense = new Expense({
@@ -23,7 +23,7 @@ router.post('/', auth, async (req, res) => {
 });
 
 // Get all expenses 
-router.get('/', auth, async (req, res) => {
+router.get('/', [auth, require('../middleware/adminAuth')], async (req, res) => {
     try {
         const expenses = await Expense.find()
             .sort({ date: -1 })
@@ -35,7 +35,7 @@ router.get('/', auth, async (req, res) => {
 });
 
 // Delete expense 
-router.delete('/:id', auth, async (req, res) => {
+router.delete('/:id', [auth, require('../middleware/adminAuth')], async (req, res) => {
     try {
         const expense = await Expense.findByIdAndDelete(req.params.id);
         if (!expense) {
@@ -48,7 +48,7 @@ router.delete('/:id', auth, async (req, res) => {
 });
 
 // Get monthly expenses (grouped by month)
-router.get('/monthly', auth, async (req, res) => {
+router.get('/monthly', [auth, require('../middleware/adminAuth')], async (req, res) => {
     try {
         const monthlyExpenses = await Expense.aggregate([
             {
@@ -66,7 +66,7 @@ router.get('/monthly', auth, async (req, res) => {
 });
 
 // Get current month's total expenses
-router.get('/current-month-total', auth, async (req, res) => {
+router.get('/current-month-total', [auth, require('../middleware/adminAuth')], async (req, res) => {
     try {
         const now = new Date();
         const startOfMonth = new Date(Date.UTC(now.getFullYear(), now.getMonth(), 1, 0, 0, 0, 0));

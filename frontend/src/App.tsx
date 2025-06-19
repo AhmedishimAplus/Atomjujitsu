@@ -5,10 +5,34 @@ import MainLayout from './components/layout/MainLayout';
 import CashierInterface from './components/cashier/CashierInterface';
 import AdminInterface from './components/admin/AdminInterface';
 import LoginPage from './components/LoginPage';
+import { getUserFromToken } from './utils/jwt';
 
 const AppContent: React.FC = () => {
-  const { state } = useAppContext();
-  const isAuthenticated = !!localStorage.getItem('token');
+  const { state, dispatch } = useAppContext();
+  const token = localStorage.getItem('token');
+  const isAuthenticated = !!token;
+
+  // Load user data from token on startup
+  useEffect(() => {
+    if (token) {
+      const userData = getUserFromToken(token);
+      if (userData) {
+        dispatch({
+          type: 'SET_USER',
+          payload: {
+            ...userData,
+            name: userData.email.split('@')[0], // Use email username as name for display
+            isTwoFactorEnabled: false // Default value, can be updated from API if needed
+          }
+        });
+
+        // Set initial view based on role
+        if (userData.role === 'Cashier') {
+          dispatch({ type: 'SET_VIEW', payload: 'cashier' });
+        }
+      }
+    }
+  }, [token, dispatch]);
 
   // Force rerender on login/logout
   useEffect(() => {
@@ -17,6 +41,12 @@ const AppContent: React.FC = () => {
     window.addEventListener('storage', onStorage);
     return () => window.removeEventListener('storage', onStorage);
   }, []);
+
+  // Determine if user can access admin interface
+  const canAccessAdmin = state.user?.role === 'Admin';
+
+  // If user tries to access admin view but doesn't have permission, show cashier view
+  const currentView = state.activeView === 'admin' && !canAccessAdmin ? 'cashier' : state.activeView;
 
   return (
     <Router>
@@ -27,7 +57,7 @@ const AppContent: React.FC = () => {
           element={
             isAuthenticated ? (
               <MainLayout>
-                {state.activeView === 'cashier' ? <CashierInterface /> : <AdminInterface />}
+                {currentView === 'cashier' ? <CashierInterface /> : <AdminInterface />}
               </MainLayout>
             ) : (
               <Navigate to="/login" replace />

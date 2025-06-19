@@ -18,6 +18,7 @@ router.get('/', auth, async (req, res) => {
 // Create category
 router.post('/', [
     auth,
+    require('../middleware/adminAuth'),
     body('name').trim().notEmpty().withMessage('Category name is required'),
     body('subcategories').isArray().withMessage('Subcategories must be an array'),
     body('subcategories.*.name').trim().notEmpty().withMessage('Subcategory name is required')
@@ -69,6 +70,7 @@ router.post('/', [
 // Update category
 router.put('/:id', [
     auth,
+    require('../middleware/adminAuth'),
     body('name').trim().notEmpty().withMessage('Category name is required'),
     body('subcategories').isArray().withMessage('Subcategories must be an array'),
     body('subcategories.*.name').trim().notEmpty().withMessage('Subcategory name is required')
@@ -107,7 +109,7 @@ router.put('/:id', [
 });
 
 // Delete category
-router.delete('/:id', auth, async (req, res) => {
+router.delete('/:id', [auth, require('../middleware/adminAuth')], async (req, res) => {
     try {
         const category = await Category.findByIdAndDelete(req.params.id);
         if (!category) {
@@ -159,7 +161,7 @@ router.post('/:id/subcategories', [
 });
 
 // Delete subcategory from category
-router.delete('/:id/subcategories/:subcategoryName', auth, async (req, res) => {
+router.delete('/:id/subcategories/:subcategoryName', [auth, require('../middleware/adminAuth')], async (req, res) => {
     try {
         const category = await Category.findById(req.params.id);
         if (!category) {

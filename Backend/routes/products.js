@@ -60,6 +60,7 @@ router.get('/owner/:owner', [
 // Create new product
 router.post('/', [
     auth,
+    require('../middleware/adminAuth'),
     body('name').trim().notEmpty().withMessage('Name is required'),
     body('staffPrice').isFloat({ min: 0 }).withMessage('Staff Price must be a positive number'),
     body('sellPrice').isFloat({ min: 0 }).withMessage('Sell Price must be a positive number'),
@@ -127,6 +128,7 @@ router.post('/', [
 // Update product
 router.put('/:id', [
     auth,
+    require('../middleware/adminAuth'),
     body('name').trim().notEmpty().withMessage('Name is required'),
     body('staffPrice').isFloat({ min: 0 }).withMessage('Staff Price must be a positive number'),
     body('sellPrice').isFloat({ min: 0 }).withMessage('Sell Price must be a positive number'),
@@ -224,7 +226,7 @@ router.patch('/:id/stock', [
 });
 
 // Delete product
-router.delete('/:id', auth, async (req, res) => {
+router.delete('/:id', [auth, require('../middleware/adminAuth')], async (req, res) => {
     try {
         const product = await Product.findByIdAndDelete(req.params.id);
 

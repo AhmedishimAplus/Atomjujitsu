@@ -1,7 +1,11 @@
 import { jwtDecode } from "jwt-decode";
+import { UserRole } from "../types";
 
 export interface JwtPayload {
     exp: number;
+    id: string;
+    email: string;
+    role: UserRole;
     [key: string]: any;
 }
 
@@ -10,6 +14,22 @@ export function getTokenExpiration(token: string): number | null {
         const decoded = jwtDecode<JwtPayload>(token);
         if (decoded && decoded.exp) {
             return decoded.exp * 1000; // convert to ms
+        }
+        return null;
+    } catch {
+        return null;
+    }
+}
+
+export function getUserFromToken(token: string): { id: string; email: string; role: UserRole } | null {
+    try {
+        const decoded = jwtDecode<JwtPayload>(token);
+        if (decoded && decoded.id && decoded.email && decoded.role) {
+            return {
+                id: decoded.id,
+                email: decoded.email,
+                role: decoded.role
+            };
         }
         return null;
     } catch {

@@ -9,9 +9,17 @@ import { User, Droplet, Plus, Minus, Edit, UserPlus, Save, RefreshCw, Clock } fr
 import { StaffMember } from '../../types';
 import * as staffApi from '../../services/staffApi';
 import * as api from '../../services/api';
+import { Navigate } from 'react-router-dom';
 
 const StaffManagement: React.FC = () => {
   const { state, dispatch } = useAppContext();
+
+  // Redirect non-admin users
+  if (state.user?.role !== 'Admin') {
+    dispatch({ type: 'SET_VIEW', payload: 'cashier' });
+    return <Navigate to="/" replace />;
+  }
+
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [newStaffName, setNewStaffName] = useState('');

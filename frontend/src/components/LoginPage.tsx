@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { login } from '../services/api';
 import Button from './ui/Button';
 import Input from './ui/Input';
+import { useAppContext } from '../context/AppContext';
 
 const LoginPage: React.FC = () => {
     const [email, setEmail] = useState('');
@@ -10,6 +11,7 @@ const LoginPage: React.FC = () => {
     const [error, setError] = useState('');
     const [loading, setLoading] = useState(false);
     const navigate = useNavigate();
+    const { dispatch } = useAppContext();
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -18,6 +20,18 @@ const LoginPage: React.FC = () => {
         try {
             const data = await login(email, password);
             localStorage.setItem('token', data.token);
+
+            // Store user data in context
+            dispatch({
+                type: 'SET_USER',
+                payload: data.user
+            });
+
+            // Set initial view based on role
+            if (data.user.role === 'Cashier') {
+                dispatch({ type: 'SET_VIEW', payload: 'cashier' });
+            }
+
             navigate('/');
         } catch (err: any) {
             setError(err.response?.data?.error || 'Login failed');

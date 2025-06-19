@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { useAppContext } from '../../context/AppContext';
 import { useNavigate } from 'react-router-dom';
 import Navbar from './Navbar';
@@ -12,12 +12,20 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
   const { state, dispatch } = useAppContext();
   const navigate = useNavigate();
 
+  // Redirect to cashier view if user is not an admin
+  useEffect(() => {
+    if (state.user && state.user.role === 'Cashier' && state.activeView === 'admin') {
+      dispatch({ type: 'SET_VIEW', payload: 'cashier' });
+    }
+  }, [state.activeView, state.user, dispatch]);
+
   const handleLogout = () => {
     localStorage.removeItem('token');
+    dispatch({ type: 'SET_USER', payload: null });
     navigate('/login');
   };
-
-  const navItems = [
+  // Base nav items that are always shown (Cashier and Logout)
+  const baseNavItems = [
     {
       label: 'Cashier',
       icon: <ShoppingBag size={20} />,
@@ -25,17 +33,28 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
       onClick: () => dispatch({ type: 'SET_VIEW', payload: 'cashier' })
     },
     {
-      label: 'Admin',
-      icon: <User size={20} />,
-      isActive: state.activeView === 'admin',
-      onClick: () => dispatch({ type: 'SET_VIEW', payload: 'admin' })
-    },
-    {
       label: 'Logout',
       icon: <LogOut size={20} />,
       isActive: false,
       onClick: handleLogout
     }
+  ];
+
+  // Create admin nav item only if user has Admin role
+  const adminNavItem = state.user?.role === 'Admin' ? [
+    {
+      label: 'Admin',
+      icon: <User size={20} />,
+      isActive: state.activeView === 'admin',
+      onClick: () => dispatch({ type: 'SET_VIEW', payload: 'admin' })
+    }
+  ] : [];
+
+  // Combine the nav items
+  const navItems = [
+    ...baseNavItems.slice(0, 1), // Cashier
+    ...adminNavItem,             // Admin (if authorized)
+    ...baseNavItems.slice(1)     // Logout
   ];
 
   const adminNavItems = state.activeView === 'admin' ? [
@@ -62,23 +81,15 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
       isActive: state.adminTab === 'staff',
       onClick: () => dispatch({ type: 'SET_ADMIN_TAB', payload: 'staff' })
     },
-   
+
   ] : [];
 
   return (
-    <div className="min-h-screen bg-gray-100 flex flex-col">
-      <Navbar
-        logo={<Coffee size={24} className="text-blue-600" />}
-        appName="POS System"
-        navItems={[
-          ...navItems,
-          {
-            label: 'Logout',
-            icon: <LogOut size={20} />,
-            onClick: handleLogout
-          }
-        ]}
-      />
+    <div className="min-h-screen bg-gray-100 flex flex-col">      <Navbar
+      logo={<Coffee size={24} className="text-blue-600" />}
+      appName="POS System"
+      navItems={navItems}
+    />
 
       <div className="flex-1 flex flex-col">
         {state.activeView === 'admin' && (

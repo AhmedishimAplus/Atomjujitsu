@@ -24,7 +24,7 @@ setInterval(() => {
 // Register new user
 router.post('/register', async (req, res) => {
     try {
-        const { name, email, password, phone } = req.body;
+        const { name, email, password, phone, role } = req.body;
 
         // Check if user already exists
         const existingUser = await User.findOne({ email });
@@ -33,7 +33,13 @@ router.post('/register', async (req, res) => {
         }
 
         // Create and save user without OTP in DB
-        const user = new User({ name, email, password, phone });
+        const user = new User({
+            name,
+            email,
+            password,
+            phone,
+            role: role || 'Cashier' // Default to Cashier if no role provided
+        });
         await user.save();
 
         // Generate OTP and store in memory
@@ -115,7 +121,7 @@ router.post('/login', async (req, res) => {
             }
         }        // Generate JWT token
         const token = jwt.sign(
-            { id: user._id, email: user.email },
+            { id: user._id, email: user.email, role: user.role },
             process.env.JWT_SECRET,
             { expiresIn: '4.5h' }
         );
@@ -126,7 +132,7 @@ router.post('/login', async (req, res) => {
                 id: user._id,
                 name: user.name,
                 email: user.email,
-
+                role: user.role,
                 isTwoFactorEnabled: user.isTwoFactorEnabled
             }
         });

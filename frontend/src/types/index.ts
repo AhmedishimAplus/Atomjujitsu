@@ -1,5 +1,15 @@
 // Define types for the POS system
 
+export type UserRole = 'Admin' | 'Cashier';
+
+export interface User {
+  id: string;
+  name: string;
+  email: string;
+  role: UserRole;
+  isTwoFactorEnabled: boolean;
+}
+
 export interface ProductItem {
   _id: string;
   name: string;

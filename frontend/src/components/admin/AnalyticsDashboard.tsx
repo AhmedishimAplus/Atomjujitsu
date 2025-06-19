@@ -5,6 +5,7 @@ import Button from '../ui/Button';
 import Select from '../ui/Select';
 import { formatCurrency, getWeekDates, getMonthDates, groupDataByWeeks } from '../../utils/helpers';
 import { TrendingUp, Download, ShoppingBag, DollarSign, RefreshCw } from 'lucide-react';
+import { Navigate } from 'react-router-dom';
 
 interface Product {
   _id: string;
@@ -14,7 +15,14 @@ interface Product {
 }
 
 const AnalyticsDashboard: React.FC = () => {
-  const { } = useAppContext(); // Context available for future use if needed
+  const { state, dispatch } = useAppContext();
+
+  // Redirect non-admin users
+  if (state.user?.role !== 'Admin') {
+    dispatch({ type: 'SET_VIEW', payload: 'cashier' });
+    return <Navigate to="/" replace />;
+  }
+
   const [reportType, setReportType] = useState<string>('weekly');
   const [salesData, setSalesData] = useState<{ label: string; value: number }[]>([]);
   const [expensesData, setExpensesData] = useState<{ label: string; value: number }[]>([]);
@@ -65,7 +73,7 @@ const AnalyticsDashboard: React.FC = () => {
           if (profitRes.ok) {
             // We get the profit for reference, but we'll always calculate it ourselves
             const profitData = await profitRes.json();
-           
+
           }
         } catch (profitError) {
           console.error('Error fetching profit data:', profitError);
@@ -86,7 +94,7 @@ const AnalyticsDashboard: React.FC = () => {
         setTotalExpensesAmount(expenseData.total || 0);
 
         // Fetch low stock products
-       
+
       } catch (error) {
         console.error('Error fetching data:', error);
         setError('Failed to load dashboard data. Please try again.');
@@ -551,7 +559,7 @@ const AnalyticsDashboard: React.FC = () => {
           </CardBody>
         </Card>
 
-       
+
 
         <Card>
           <CardHeader>
@@ -656,7 +664,7 @@ const AnalyticsDashboard: React.FC = () => {
         </Card>
       </div>
 
-      
+
     </div>
   );
 };

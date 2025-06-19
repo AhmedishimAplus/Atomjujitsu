@@ -10,9 +10,17 @@ import { formatCurrency, formatDate, generateId } from '../../utils/helpers';
 import { Plus, Calendar, DollarSign } from 'lucide-react';
 import { createExpense, getExpenses, getCategories, getSales, getProducts, getCurrentWeekTotal } from '../../services/api';
 import { ProductItem } from '../../types';
+import { Navigate } from 'react-router-dom';
 
 const FinancialTracking: React.FC = () => {
   const { state, dispatch } = useAppContext();
+
+  // Redirect non-admin users
+  if (state.user?.role !== 'Admin') {
+    dispatch({ type: 'SET_VIEW', payload: 'cashier' });
+    return <Navigate to="/" replace />;
+  }
+
   const [expenseModalOpen, setExpenseModalOpen] = useState(false); const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [dateRange, setDateRange] = useState<string>('all');
   const [view, setView] = useState<'expenses' | 'sales' | 'orders'>('expenses');
@@ -578,9 +586,7 @@ const FinancialTracking: React.FC = () => {
           )}
         </div>
       ) : (
-        <>
-
-          {/* Backend Month/Week Totals Cards */}
+        <>          {/* Backend Month/Week Totals Cards */}
           {backendTotalsLoading ? (
             <div className="text-center py-8 text-gray-500">Loading backend totals...</div>
           ) : backendTotalsError ? (
@@ -627,7 +633,7 @@ const FinancialTracking: React.FC = () => {
             <CardHeader className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
               <h2 className="text-lg font-semibold text-gray-800">Sales Records</h2>
               <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
-              
+
               </div>
             </CardHeader>
             <CardBody className="p-0">

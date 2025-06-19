@@ -20,6 +20,12 @@ const userSchema = new mongoose.Schema({
     phone: {
         type: String
     },
+    role: {
+        type: String,
+        enum: ['Admin', 'Cashier'],
+        default: 'Cashier',
+        required: true
+    },
     isEmailVerified: {
         type: Boolean,
         default: false

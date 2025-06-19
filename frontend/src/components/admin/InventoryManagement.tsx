@@ -6,6 +6,7 @@ import Input from '../ui/Input';
 import Select from '../ui/Select';
 import Modal from '../ui/Modal';
 import { ProductItem } from '../../types';
+import { Navigate } from 'react-router-dom';
 
 import { Plus, Edit, Trash2 } from 'lucide-react';
 import {
@@ -21,7 +22,14 @@ import {
 
 
 const InventoryManagement: React.FC = () => {
-  const { } = useAppContext(); // Keeping the context import for future use
+  const { state, dispatch } = useAppContext();
+
+  // Redirect non-admin users
+  if (state.user?.role !== 'Admin') {
+    dispatch({ type: 'SET_VIEW', payload: 'cashier' });
+    return <Navigate to="/" replace />;
+  }
+
   const [searchTerm, setSearchTerm] = useState('');
   const [productModalOpen, setProductModalOpen] = useState(false);
   const [deleteModalOpen, setDeleteModalOpen] = useState(false); const [editingProduct, setEditingProduct] = useState<ProductItem | null>(null);
