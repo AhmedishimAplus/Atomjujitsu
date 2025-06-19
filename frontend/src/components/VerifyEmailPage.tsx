@@ -92,7 +92,7 @@ const VerifyEmailPage: React.FC = () => {
                 const newOtp = [...otp];
                 newOtp[index] = '';
                 setOtp(newOtp);
-            } 
+            }
             // If the current input is empty and not the first, move to previous
             else if (index > 0) {
                 const newOtp = [...otp];
@@ -100,11 +100,11 @@ const VerifyEmailPage: React.FC = () => {
                 setOtp(newOtp);
                 focusInput(index - 1);
             }
-        } 
+        }
         // Allow arrow key navigation
         else if (e.key === 'ArrowLeft' && index > 0) {
             focusInput(index - 1);
-        } 
+        }
         else if (e.key === 'ArrowRight' && index < 5) {
             focusInput(index + 1);
         }
@@ -115,14 +115,14 @@ const VerifyEmailPage: React.FC = () => {
         e.preventDefault();
         const pastedData = e.clipboardData.getData('text');
         const pastedDigits = pastedData.replace(/\D/g, '').split('').slice(0, 6);
-        
+
         if (pastedDigits.length) {
             const newOtp = [...otp];
             pastedDigits.forEach((digit, i) => {
                 if (i < 6) newOtp[i] = digit;
             });
             setOtp(newOtp);
-            
+
             // Focus on the next empty input or the last one
             const nextEmptyIndex = newOtp.findIndex(digit => !digit);
             if (nextEmptyIndex !== -1 && nextEmptyIndex < 6) {
