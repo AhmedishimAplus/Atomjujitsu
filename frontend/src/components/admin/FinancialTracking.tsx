@@ -463,11 +463,17 @@ const FinancialTracking: React.FC = () => {
                         </div>
                       );
                     })}
-                  </div>
-
-                  <div className="mt-4 pt-3 border-t border-gray-100 flex justify-between font-medium">
-                    <span>Total</span>
-                    <span>{formatCurrency(sale.total)}</span>
+                  </div>                  <div className="mt-4 pt-3 border-t border-gray-100 space-y-1">
+                    {sale.sharoofaAmount > 0 && (
+                      <div className="flex justify-between text-sm text-blue-700">
+                        <span>Sharoofa Total</span>
+                        <span>{formatCurrency(sale.sharoofaAmount)}</span>
+                      </div>
+                    )}
+                    <div className="flex justify-between font-medium">
+                      <span>Total</span>
+                      <span>{formatCurrency(sale.total)}</span>
+                    </div>
                   </div>
                 </div>
               </CardBody>
@@ -574,17 +580,14 @@ const FinancialTracking: React.FC = () => {
                       // Get product info for category/subcategory/owner
                       const product = typeof item.productId === 'string' ? products.find(p => p._id === item.productId) : undefined;
                       const costPrice = productCostMap[item.productId] !== undefined ? productCostMap[item.productId] : (typeof item.costPrice === 'number' && !isNaN(item.costPrice) ? item.costPrice : 0);
-                      const owner = product?.owner || item.owner;
-
-                      // Handle free water bottle quantities (profits should be negative for free bottles)
-                      const isWaterBottle = item.name.toLowerCase().includes('water bottle');
+                      const owner = product?.owner || item.owner;                      // Handle free water bottle quantities (profits should be negative for free bottles)
                       const hasFreeQuantity = item.freeQuantity > 0;
                       const freeQty = item.freeQuantity || 0;
                       const paidQty = item.paidQuantity || item.quantity;                      // Calculate correct profit:
                       // 1. For free items: set price to 0 and calculate profit (-cost)
                       // 2. For regular items: (price - cost) * quantity
                       let profit = 0;
-                      let displayPriceUsed = item.priceUsed;                      if (owner !== 'Sharoofa') {
+                      let displayPriceUsed = item.priceUsed; if (owner !== 'Sharoofa') {
                         if (hasFreeQuantity) {
                           // For items that are completely free, show negative cost as profit
                           if (item.freeQuantity === item.quantity) {
@@ -630,11 +633,11 @@ const FinancialTracking: React.FC = () => {
                           <td className="px-6 py-4 whitespace-nowrap text-right">{item.quantity}</td>                          <td className="px-6 py-4 whitespace-nowrap text-right">
                             {item.freeQuantity > 0 ? (
                               <div>
-                                <div>{formatCurrency(item.priceUsed)}</div>
+                                <div>{formatCurrency(displayPriceUsed)}</div>
                                 <div className="text-xs text-green-600">({item.freeQuantity} free - $0.00)</div>
                               </div>
                             ) : (
-                              formatCurrency(item.priceUsed)
+                              formatCurrency(displayPriceUsed)
                             )}
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap text-right">{formatCurrency(costPrice)}</td>
