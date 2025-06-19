@@ -5,6 +5,8 @@ import MainLayout from './components/layout/MainLayout';
 import CashierInterface from './components/cashier/CashierInterface';
 import AdminInterface from './components/admin/AdminInterface';
 import LoginPage from './components/LoginPage';
+import SignupPage from './components/SignupPage';
+import VerifyEmailPage from './components/VerifyEmailPage';
 import { getUserFromToken } from './utils/jwt';
 
 const AppContent: React.FC = () => {
@@ -52,6 +54,8 @@ const AppContent: React.FC = () => {
     <Router>
       <Routes>
         <Route path="/login" element={<LoginPage />} />
+        <Route path="/signup" element={<SignupPage />} />
+        <Route path="/verify-email" element={<VerifyEmailPage />} />
         <Route
           path="/*"
           element={

@@ -32,6 +32,16 @@ export const register = async (userData: {
   return response.data;
 };
 
+export const verifyEmail = async (email: string, otp: string) => {
+  const response = await api.post('/users/verify-email', { email, otp });
+  return response.data;
+};
+
+export const resendVerification = async (email: string) => {
+  const response = await api.post('/users/resend-verification', { email });
+  return response.data;
+};
+
 // Products
 export const getProducts = async () => {
   const response = await api.get('/products');
