@@ -5,7 +5,7 @@ import Input from './ui/Input';
 import { verifyEmail, resendVerification } from '../services/api';
 
 const VerifyEmailPage: React.FC = () => {
-    const [otp, setOtp] = useState('');
+    const [otp, setOtp] = useState(['', '', '', '', '', '']);
     const [email, setEmail] = useState('');
     const [error, setError] = useState('');
     const [loading, setLoading] = useState(false);
@@ -19,6 +19,12 @@ const VerifyEmailPage: React.FC = () => {
         if (emailParam) {
             setEmail(emailParam);
         }
+
+        // Focus on the first input when the component mounts
+        const firstInput = document.getElementById('otp-0');
+        if (firstInput) {
+            firstInput.focus();
+        }
     }, [location]);
 
     const handleSubmit = async (e: React.FormEvent) => {
@@ -26,14 +32,15 @@ const VerifyEmailPage: React.FC = () => {
         setLoading(true);
         setError('');
 
-        if (otp.length !== 6) {
+        const otpValue = otp.join('');
+        if (otpValue.length !== 6) {
             setError('Please enter a valid 6-digit verification code');
             setLoading(false);
             return;
         }
 
         try {
-            await verifyEmail(email, otp);
+            await verifyEmail(email, otpValue);
             // Redirect to login page after successful verification
             navigate('/login?verified=true');
         } catch (err: any) {
@@ -56,6 +63,76 @@ const VerifyEmailPage: React.FC = () => {
         }
     };
 
+    const focusInput = (index: number) => {
+        const input = document.getElementById(`otp-${index}`) as HTMLInputElement;
+        if (input) {
+            input.focus();
+        }
+    };
+
+    const handleChange = (index: number, value: string) => {
+        // Only allow numbers
+        if (value && !/^\d+$/.test(value)) return;
+
+        // Update the digit at the current index
+        const newOtp = [...otp];
+        newOtp[index] = value;
+        setOtp(newOtp);
+
+        // If a digit was entered and there's a next input, focus on it
+        if (value && index < 5) {
+            focusInput(index + 1);
+        }
+    };
+
+    const handleKeyDown = (index: number, e: React.KeyboardEvent<HTMLInputElement>) => {
+        if (e.key === 'Backspace') {
+            // If the current input has a value, clear it
+            if (otp[index]) {
+                const newOtp = [...otp];
+                newOtp[index] = '';
+                setOtp(newOtp);
+            } 
+            // If the current input is empty and not the first, move to previous
+            else if (index > 0) {
+                const newOtp = [...otp];
+                newOtp[index - 1] = '';
+                setOtp(newOtp);
+                focusInput(index - 1);
+            }
+        } 
+        // Allow arrow key navigation
+        else if (e.key === 'ArrowLeft' && index > 0) {
+            focusInput(index - 1);
+        } 
+        else if (e.key === 'ArrowRight' && index < 5) {
+            focusInput(index + 1);
+        }
+    };
+
+    // Handle paste event to fill multiple boxes at once
+    const handlePaste = (e: React.ClipboardEvent<HTMLInputElement>) => {
+        e.preventDefault();
+        const pastedData = e.clipboardData.getData('text');
+        const pastedDigits = pastedData.replace(/\D/g, '').split('').slice(0, 6);
+        
+        if (pastedDigits.length) {
+            const newOtp = [...otp];
+            pastedDigits.forEach((digit, i) => {
+                if (i < 6) newOtp[i] = digit;
+            });
+            setOtp(newOtp);
+            
+            // Focus on the next empty input or the last one
+            const nextEmptyIndex = newOtp.findIndex(digit => !digit);
+            if (nextEmptyIndex !== -1 && nextEmptyIndex < 6) {
+                focusInput(nextEmptyIndex);
+            } else {
+                focusInput(5);
+            }
+        }
+    };
+
     return (
         <div className="flex min-h-screen items-center justify-center bg-gray-100">
             <div className="w-full max-w-md">
@@ -67,38 +144,20 @@ const VerifyEmailPage: React.FC = () => {
                     </p>
 
                     <div className="mb-6">
-                        <label htmlFor="otp" className="block text-sm font-medium text-gray-700 mb-1">
+                        <label htmlFor="otp-0" className="block text-sm font-medium text-gray-700 mb-1">
                             Enter Verification Code
-                        </label>                        <div className="flex justify-center">
+                        </label>
+                        <div className="flex justify-center">
                             <div className="grid grid-cols-6 gap-2">
-                                {[...Array(6)].map((_, index) => (
+                                {otp.map((digit, index) => (
                                     <Input
                                         key={index}
                                         type="text"
-                                        value={otp[index] || ''}
-                                        onChange={(e) => {
-                                            const value = e.target.value.replace(/[^0-9]/g, '');
-                                            if (value) {
-                                                // Update the current digit
-                                                const newOtp = otp.split('');
-                                                newOtp[index] = value[0];
-                                                setOtp(newOtp.join(''));
-
-                                                // Move focus to next input if available
-                                                if (index < 5 && value) {
-                                                    const nextInput = document.getElementById(`otp-${index + 1}`);
-                                                    if (nextInput) nextInput.focus();
-                                                }
-                                            }
-                                        }}
-                                        onKeyDown={(e) => {
-                                            // Handle backspace to go to previous input
-                                            if (e.key === 'Backspace' && !otp[index] && index > 0) {
-                                                const prevInput = document.getElementById(`otp-${index - 1}`);
-                                                if (prevInput) prevInput.focus();
-                                            }
-                                        }}
                                         id={`otp-${index}`}
+                                        value={digit}
+                                        onChange={(e) => handleChange(index, e.target.value)}
+                                        onKeyDown={(e) => handleKeyDown(index, e)}
+                                        onPaste={handlePaste}
                                         required
                                         className="w-12 h-12 text-center text-xl font-bold"
                                         maxLength={1}
@@ -136,7 +195,5 @@ const VerifyEmailPage: React.FC = () => {
         </div>
     );
 };
-
-// API function is now imported from services/api.ts
 
 export default VerifyEmailPage;
