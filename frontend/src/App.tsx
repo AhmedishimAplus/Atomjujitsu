@@ -7,13 +7,13 @@ import AdminInterface from './components/admin/AdminInterface';
 import LoginPage from './components/LoginPage';
 import SignupPage from './components/SignupPage';
 import VerifyEmailPage from './components/VerifyEmailPage';
+import TwoFactorVerification from './components/TwoFactorVerification';
 import { getUserFromToken } from './utils/jwt';
 
 const AppContent: React.FC = () => {
   const { state, dispatch } = useAppContext();
   const token = localStorage.getItem('token');
   const isAuthenticated = !!token;
-
   // Load user data from token on startup
   useEffect(() => {
     if (token) {
@@ -24,7 +24,7 @@ const AppContent: React.FC = () => {
           payload: {
             ...userData,
             name: userData.email.split('@')[0], // Use email username as name for display
-            isTwoFactorEnabled: false // Default value, can be updated from API if needed
+            isTwoFactorEnabled: userData.isTwoFactorEnabled || false
           }
         });
 
@@ -49,13 +49,13 @@ const AppContent: React.FC = () => {
 
   // If user tries to access admin view but doesn't have permission, show cashier view
   const currentView = state.activeView === 'admin' && !canAccessAdmin ? 'cashier' : state.activeView;
-
   return (
     <Router>
       <Routes>
         <Route path="/login" element={<LoginPage />} />
         <Route path="/signup" element={<SignupPage />} />
         <Route path="/verify-email" element={<VerifyEmailPage />} />
+        <Route path="/verify-2fa" element={<TwoFactorVerification />} />
         <Route
           path="/*"
           element={

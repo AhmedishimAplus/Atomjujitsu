@@ -24,9 +24,7 @@ const LoginPage: React.FC = () => {
         if (verified) {
             setSuccess('Email verified successfully! You can now log in.');
         }
-    }, [location]);
-
-    const handleSubmit = async (e: React.FormEvent) => {
+    }, [location]);    const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         setLoading(true);
         setError('');
@@ -49,6 +47,12 @@ const LoginPage: React.FC = () => {
 
             navigate('/');
         } catch (err: any) {
+            // Check if 2FA is required
+            if (err.response?.data?.requires2FA) {
+                // Navigate to 2FA verification page with email and password
+                navigate('/verify-2fa', { state: { email, password } });
+                return;
+            }
             setError(err.response?.data?.error || 'Login failed');
         } finally {
             setLoading(false);

@@ -21,14 +21,15 @@ export function getTokenExpiration(token: string): number | null {
     }
 }
 
-export function getUserFromToken(token: string): { id: string; email: string; role: UserRole } | null {
+export function getUserFromToken(token: string): { id: string; email: string; role: UserRole; isTwoFactorEnabled?: boolean } | null {
     try {
         const decoded = jwtDecode<JwtPayload>(token);
         if (decoded && decoded.id && decoded.email && decoded.role) {
             return {
                 id: decoded.id,
                 email: decoded.email,
-                role: decoded.role
+                role: decoded.role,
+                isTwoFactorEnabled: decoded.isTwoFactorEnabled
             };
         }
         return null;

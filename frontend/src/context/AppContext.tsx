@@ -11,13 +11,13 @@ type AppState = {
   transactions: Transaction[];
   expenses: Expense[];
   activeView: 'cashier' | 'admin';
-  adminTab: 'inventory' | 'financial' | 'analytics' | 'staff' | 'water-bottles';
+  adminTab: 'inventory' | 'financial' | 'analytics' | 'staff' | 'water-bottles' | '2fa';
   user: User | null;
 };
 
 type AppAction =
   | { type: 'SET_VIEW'; payload: 'cashier' | 'admin' }
-  | { type: 'SET_ADMIN_TAB'; payload: 'inventory' | 'financial' | 'analytics' | 'staff' | 'water-bottles' }
+  | { type: 'SET_ADMIN_TAB'; payload: 'inventory' | 'financial' | 'analytics' | 'staff' | 'water-bottles' | '2fa' }
   | { type: 'ADD_TO_ORDER'; payload: { product: ProductItem; quantity: number; isStaffPrice: boolean } }
   | { type: 'REMOVE_FROM_ORDER'; payload: string }
   | { type: 'UPDATE_ORDER_ITEM_QUANTITY'; payload: { productId: string; quantity: number } }

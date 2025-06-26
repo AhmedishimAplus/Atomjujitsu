@@ -16,8 +16,8 @@ api.interceptors.request.use((config) => {
   return config;
 });
 
-export const login = async (email: string, password: string) => {
-  const response = await api.post('/users/login', { email, password });
+export const login = async (email: string, password: string, twoFactorToken?: string) => {
+  const response = await api.post('/users/login', { email, password, twoFactorToken });
   return response.data;
 };
 
@@ -181,6 +181,22 @@ export const getExpenses = async () => {
 
 export const createExpense = async (expenseData: any) => {
   const response = await api.post('/expenses', expenseData);
+  return response.data;
+};
+
+// Two-Factor Authentication
+export const enable2FA = async () => {
+  const response = await api.post('/users/enable-2fa');
+  return response.data;
+};
+
+export const verify2FASetup = async (token: string) => {
+  const response = await api.post('/users/verify-2fa-setup', { token });
+  return response.data;
+};
+
+export const disable2FA = async () => {
+  const response = await api.post('/users/disable-2fa');
   return response.data;
 };
 

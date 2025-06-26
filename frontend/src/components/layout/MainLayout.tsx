@@ -2,7 +2,7 @@ import React, { useEffect } from 'react';
 import { useAppContext } from '../../context/AppContext';
 import { useNavigate } from 'react-router-dom';
 import Navbar from './Navbar';
-import { Coffee, ShoppingBag, User, BarChart3, Package, LogOut, Droplet } from 'lucide-react';
+import { Coffee, ShoppingBag, User, BarChart3, Package, LogOut, Droplet, Lock } from 'lucide-react';
 
 interface MainLayoutProps {
   children: React.ReactNode;
@@ -81,7 +81,12 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
       isActive: state.adminTab === 'staff',
       onClick: () => dispatch({ type: 'SET_ADMIN_TAB', payload: 'staff' })
     },
-
+    {
+      label: '2FA',
+      icon: <Lock size={20} />,
+      isActive: state.adminTab === '2fa',
+      onClick: () => dispatch({ type: 'SET_ADMIN_TAB', payload: '2fa' })
+    },
   ] : [];
 
   return (

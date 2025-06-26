@@ -4,6 +4,7 @@ import InventoryManagement from './InventoryManagement';
 import FinancialTracking from './FinancialTracking';
 import AnalyticsDashboard from './AnalyticsDashboard';
 import StaffManagement from './StaffManagement';
+import TwoFactorSetup from './TwoFactorSetup';
 import { Navigate } from 'react-router-dom';
 
 const AdminInterface: React.FC = () => {
@@ -15,8 +16,7 @@ const AdminInterface: React.FC = () => {
     return <Navigate to="/" replace />;
   }
 
-  // Render the appropriate tab content
-  const renderTabContent = () => {
+  // Render the appropriate tab content  const renderTabContent = () => {
     switch (state.adminTab) {
       case 'inventory':
         return <InventoryManagement />;
@@ -26,10 +26,13 @@ const AdminInterface: React.FC = () => {
         return <AnalyticsDashboard />;
       case 'staff':
         return <StaffManagement />;
+      case '2fa':
+        return <TwoFactorSetup />;
       default:
         return <InventoryManagement />;
     }
-  };
+  ;
+
 
   return (
     <div className="space-y-6">
