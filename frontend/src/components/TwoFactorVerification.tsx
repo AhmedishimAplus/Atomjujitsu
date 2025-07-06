@@ -3,6 +3,7 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { login } from '../services/api';
 import Button from './ui/Button';
 import Input from './ui/Input';
+import { useAppContext } from '../context/AppContext';
 
 const TwoFactorVerification: React.FC = () => {
   const [code, setCode] = useState('');
@@ -10,37 +11,50 @@ const TwoFactorVerification: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const location = useLocation();
   const navigate = useNavigate();
-  
+  const { dispatch } = useAppContext();
+
   // Get email and password from location state
   const { email, password } = location.state || {};
-  
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     if (!email || !password) {
       setError('Missing login credentials. Please try logging in again.');
       return;
     }
-    
+
     if (code.length !== 6) {
       setError('Please enter a valid 6-digit verification code');
       return;
-    }
-    
-    try {
+    } try {
       setLoading(true);
       const response = await login(email, password, code);
-      
+
       // Store token and redirect
       localStorage.setItem('token', response.token);
-      navigate('/');
+
+      // Update app context with user data
+      dispatch({
+        type: 'SET_USER',
+        payload: response.user
+      });
+
+      // Set initial view based on role
+      if (response.user.role === 'Cashier') {
+        dispatch({ type: 'SET_VIEW', payload: 'cashier' });
+      } else {
+        dispatch({ type: 'SET_VIEW', payload: 'admin' });
+      }
+
+      // Navigate to the main page
+      navigate('/', { replace: true });
     } catch (err: any) {
       setError(err.response?.data?.error || 'Invalid verification code');
     } finally {
       setLoading(false);
     }
   };
-  
+
   return (
     <div className="flex min-h-screen items-center justify-center bg-gray-100">
       <div className="w-full max-w-md">
@@ -49,13 +63,13 @@ const TwoFactorVerification: React.FC = () => {
           <p className="text-gray-600 mb-8 text-center">
             Enter the 6-digit code from your authenticator app to continue
           </p>
-          
+
           <div className="mb-6">
             <label htmlFor="code" className="block text-sm font-medium text-gray-700 mb-1">
               Verification Code
             </label>
-            <Input 
-              type="text" 
+            <Input
+              type="text"
               id="code"
               value={code}
               onChange={(e) => setCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
@@ -65,9 +79,9 @@ const TwoFactorVerification: React.FC = () => {
               required
             />
           </div>
-          
+
           {error && <div className="text-red-500 text-sm mb-4">{error}</div>}
-          
+
           <Button
             type="submit"
             disabled={loading || code.length !== 6}
@@ -75,7 +89,7 @@ const TwoFactorVerification: React.FC = () => {
           >
             {loading ? 'Verifying...' : 'Verify'}
           </Button>
-          
+
           <div className="mt-6 text-center">
             <button
               type="button"

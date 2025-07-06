@@ -24,7 +24,7 @@ const LoginPage: React.FC = () => {
         if (verified) {
             setSuccess('Email verified successfully! You can now log in.');
         }
-    }, [location]);    const handleSubmit = async (e: React.FormEvent) => {
+    }, [location]); const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         setLoading(true);
         setError('');
@@ -46,13 +46,20 @@ const LoginPage: React.FC = () => {
             }
 
             navigate('/');
-        } catch (err: any) {
-            // Check if 2FA is required
+        } catch (err: any) {            // Check if 2FA is required
             if (err.response?.data?.requires2FA) {
                 // Navigate to 2FA verification page with email and password
                 navigate('/verify-2fa', { state: { email, password } });
                 return;
             }
+
+            // Check if account is locked
+            if (err.response?.data?.accountLocked) {
+                const lockTime = err.response?.data?.lockTime || 15;
+                setError(`Account temporarily locked. Please try again in ${lockTime} minutes.`);
+                return;
+            }
+
             setError(err.response?.data?.error || 'Login failed');
         } finally {
             setLoading(false);

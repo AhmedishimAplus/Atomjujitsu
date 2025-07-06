@@ -6,7 +6,7 @@ const speakeasy = require('speakeasy');
 const qrcode = require('qrcode');
 const jwt = require('jsonwebtoken');
 const crypto = require('crypto');
-const { sendVerificationEmail, sendTwoFactorEmail } = require('../services/emailService');
+const { sendVerificationEmail, sendTwoFactorEmail, sendLoginWarningEmail } = require('../services/emailService');
 
 // In-memory OTP store (email -> {otp, expires})
 const otpStore = new Map();
@@ -85,13 +85,33 @@ router.post('/login', async (req, res) => {
     try {
         const { email, password, twoFactorToken } = req.body;
 
-        const user = await User.findOne({ email });
+        // Use select('+twoFactorSecret') to include the field in this query
+        const user = await User.findOne({ email }).select('+twoFactorSecret');
         if (!user) {
             return res.status(401).json({ error: 'Invalid credentials' });
         }
 
+        // Check if account is locked
+        if (user.isLocked()) {
+            const lockTime = Math.ceil((user.lockUntil - Date.now()) / 60000); // convert to minutes
+            return res.status(401).json({
+                error: `Account is temporarily locked. Please try again in ${lockTime} minutes.`,
+                accountLocked: true,
+                lockTime
+            });
+        }
+
         const isPasswordValid = await user.comparePassword(password);
         if (!isPasswordValid) {
+            // Increment failed login attempts
+            await user.incrementLoginAttempts();
+
+            // Send warning email after certain number of attempts
+            if (user.loginAttempts >= 3) {
+                const isLocked = user.loginAttempts >= 5;
+                await sendLoginWarningEmail(user.email, user.loginAttempts, isLocked);
+            }
+
             return res.status(401).json({ error: 'Invalid credentials' });
         }
 
@@ -110,18 +130,37 @@ router.post('/login', async (req, res) => {
                 });
             }
 
+            // Decrypt the stored secret
+            const decryptedSecret = user.decryptTwoFactorSecret();
+
             const isValid = speakeasy.totp.verify({
-                secret: user.twoFactorSecret,
+                secret: decryptedSecret,
                 encoding: 'base32',
                 token: twoFactorToken
             });
 
             if (!isValid) {
+                // Increment failed login attempts for incorrect 2FA codes too
+                await user.incrementLoginAttempts();
+
+                if (user.loginAttempts >= 3) {
+                    const isLocked = user.loginAttempts >= 5;
+                    await sendLoginWarningEmail(user.email, user.loginAttempts, isLocked);
+                }
+
                 return res.status(401).json({ error: 'Invalid 2FA token' });
             }
-        }        // Generate JWT token
+        }
+
+        // Reset login attempts on successful login
+        await user.resetLoginAttempts();        // Generate JWT token
         const token = jwt.sign(
-            { id: user._id, email: user.email, role: user.role },
+            { 
+                id: user._id, 
+                email: user.email, 
+                role: user.role,
+                isTwoFactorEnabled: user.isTwoFactorEnabled 
+            },
             process.env.JWT_SECRET,
             { expiresIn: '4.5h' }
         );
@@ -144,15 +183,15 @@ router.post('/login', async (req, res) => {
 // Enable 2FA
 router.post('/enable-2fa', auth, async (req, res) => {
     try {
-        const user = await User.findById(req.user.id);
+        const user = await User.findById(req.user.id).select('+twoFactorSecret');
 
         // Generate new secret
         const secret = speakeasy.generateSecret({
             name: `AtomJujitsu:${user.email}`
         });
 
-        // Save secret to user
-        user.twoFactorSecret = secret.base32;
+        // Encrypt and save secret to user
+        user.twoFactorSecret = user.encryptTwoFactorSecret(secret.base32);
         await user.save();
 
         // Generate QR code
@@ -161,7 +200,7 @@ router.post('/enable-2fa', auth, async (req, res) => {
         // Send email notification
         await sendTwoFactorEmail(
             user.email,
-            '2FA has been enabled for your account. Please save your backup codes safely.'
+            '2FA setup has been initiated for your account. Please complete setup by verifying your code.'
         );
 
         res.json({
@@ -178,10 +217,13 @@ router.post('/enable-2fa', auth, async (req, res) => {
 router.post('/verify-2fa-setup', auth, async (req, res) => {
     try {
         const { token } = req.body;
-        const user = await User.findById(req.user.id);
+        const user = await User.findById(req.user.id).select('+twoFactorSecret');
+
+        // Decrypt the stored secret
+        const decryptedSecret = user.decryptTwoFactorSecret();
 
         const verified = speakeasy.totp.verify({
-            secret: user.twoFactorSecret,
+            secret: decryptedSecret,
             encoding: 'base32',
             token
         });
@@ -193,6 +235,12 @@ router.post('/verify-2fa-setup', auth, async (req, res) => {
         user.isTwoFactorEnabled = true;
         await user.save();
 
+        // Send confirmation email
+        await sendTwoFactorEmail(
+            user.email,
+            '2FA has been successfully enabled for your account. Your account is now more secure.'
+        );
+
         res.json({ message: '2FA enabled successfully' });
     } catch (error) {
         res.status(500).json({ error: error.message });
@@ -202,22 +250,22 @@ router.post('/verify-2fa-setup', auth, async (req, res) => {
 // Disable 2FA
 router.post('/disable-2fa', auth, async (req, res) => {
     try {
-        const user = await User.findById(req.user.id);
-        
+        const user = await User.findById(req.user.id).select('+twoFactorSecret');
+
         if (!user.isTwoFactorEnabled) {
             return res.status(400).json({ error: '2FA is not enabled for this account' });
         }
-        
+
         user.isTwoFactorEnabled = false;
         user.twoFactorSecret = undefined;
         await user.save();
-        
+
         // Send email notification
         await sendTwoFactorEmail(
             user.email,
-            '2FA has been disabled for your account.'
+            '2FA has been disabled for your account. This reduces your account security. If you did not disable 2FA, please contact support immediately.'
         );
-        
+
         res.json({ message: '2FA disabled successfully' });
     } catch (error) {
         res.status(500).json({ error: error.message });

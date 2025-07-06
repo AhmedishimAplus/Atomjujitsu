@@ -18,13 +18,12 @@ const AppContent: React.FC = () => {
   useEffect(() => {
     if (token) {
       const userData = getUserFromToken(token);
-      if (userData) {
-        dispatch({
+      if (userData) {      dispatch({
           type: 'SET_USER',
           payload: {
             ...userData,
-            name: userData.email.split('@')[0], // Use email username as name for display
-            isTwoFactorEnabled: userData.isTwoFactorEnabled || false
+            name: userData.name || userData.email.split('@')[0], // Use email username as name for display if name is missing
+            isTwoFactorEnabled: Boolean(userData.isTwoFactorEnabled) // Make sure it's a boolean
           }
         });
 
