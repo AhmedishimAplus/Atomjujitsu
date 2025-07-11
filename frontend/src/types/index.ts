@@ -7,7 +7,13 @@ export interface User {
   name: string;
   email: string;
   role: UserRole;
+  phone?: string;
   isTwoFactorEnabled: boolean;
+  isEmailVerified: boolean;
+  loginAttempts?: number;
+  lockUntil?: Date | null;
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 export interface ProductItem {

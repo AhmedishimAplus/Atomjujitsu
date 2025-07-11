@@ -103,7 +103,7 @@ userSchema.methods.decryptTwoFactorSecret = function () {
 userSchema.methods.incrementLoginAttempts = async function () {
     // If account is already locked, do nothing
     if (this.lockUntil && this.lockUntil > Date.now()) {
-        return;
+        return this;
     }
 
     // Increment attempts counter
@@ -111,9 +111,8 @@ userSchema.methods.incrementLoginAttempts = async function () {
 
     // Lock account if too many attempts
     const MAX_LOGIN_ATTEMPTS = 5;
-    const wasJustLocked = this.loginAttempts >= MAX_LOGIN_ATTEMPTS && (!this.lockUntil || this.lockUntil <= Date.now());
-
-    if (wasJustLocked) {
+    if (this.loginAttempts >= MAX_LOGIN_ATTEMPTS) {
+        console.log(`Locking account for user ${this.email} after ${this.loginAttempts} failed attempts`);
         this.lockUntil = new Date(Date.now() + 15 * 60 * 1000); // Lock for 15 minutes
     }
 

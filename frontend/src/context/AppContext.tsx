@@ -11,13 +11,13 @@ type AppState = {
   transactions: Transaction[];
   expenses: Expense[];
   activeView: 'cashier' | 'admin';
-  adminTab: 'inventory' | 'financial' | 'analytics' | 'staff' | 'water-bottles' | '2fa';
+  adminTab: 'inventory' | 'financial' | 'analytics' | 'staff' | 'water-bottles' | '2fa' | 'users';
   user: User | null;
 };
 
 type AppAction =
   | { type: 'SET_VIEW'; payload: 'cashier' | 'admin' }
-  | { type: 'SET_ADMIN_TAB'; payload: 'inventory' | 'financial' | 'analytics' | 'staff' | 'water-bottles' | '2fa' }
+  | { type: 'SET_ADMIN_TAB'; payload: 'inventory' | 'financial' | 'analytics' | 'staff' | 'water-bottles' | '2fa' | 'users' }
   | { type: 'ADD_TO_ORDER'; payload: { product: ProductItem; quantity: number; isStaffPrice: boolean } }
   | { type: 'REMOVE_FROM_ORDER'; payload: string }
   | { type: 'UPDATE_ORDER_ITEM_QUANTITY'; payload: { productId: string; quantity: number } }
@@ -222,7 +222,7 @@ function appReducer(state: AppState, action: AppAction): AppState {
       const calculatedTotal = itemsWithFreeBottleInfo.reduce((total, item) => {
         // If this item has free quantity info, only count the paid portion
         if (item.freeQuantity) {
-          return total + (item.paidQuantity * item.price);
+          return total + ((item.paidQuantity || 0) * item.price);
         }
         // Otherwise count the full amount
         return total + (item.quantity * item.price);

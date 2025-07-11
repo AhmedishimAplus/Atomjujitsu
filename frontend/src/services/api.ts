@@ -200,4 +200,20 @@ export const disable2FA = async (token: string) => {
   return response.data;
 };
 
+// User Management (Admin only)
+export const searchUsers = async (query: string) => {
+  const response = await api.get(`/users/search`, { params: { query } });
+  return response.data;
+};
+
+export const getUserById = async (id: string) => {
+  const response = await api.get(`/users/${id}`);
+  return response.data;
+};
+
+export const deleteUser = async (id: string) => {
+  const response = await api.delete(`/users/${id}`);
+  return response.data;
+};
+
 export default api;

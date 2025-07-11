@@ -105,17 +105,34 @@ router.post('/login', async (req, res) => {
         if (!isPasswordValid) {
             // Increment failed login attempts
             await user.incrementLoginAttempts();
-
-            // Send warning email after certain number of attempts
-            if (user.loginAttempts >= 3) {
-                const isLocked = user.loginAttempts >= 5;
+            
+            // Check if this attempt caused the account to be locked
+            if (user.loginAttempts >= 5) {
+                // Account should be locked now
                 try {
-                    console.log(`Sending warning email to ${user.email}, attempts: ${user.loginAttempts}, locked: ${isLocked}`);
-                    await sendLoginWarningEmail(user.email, user.loginAttempts, isLocked);
+                    console.log(`Account locked for ${user.email}, sending email notification`);
+                    await sendLoginWarningEmail(user.email, user.loginAttempts, true);
+                    console.log("Account lock email sent successfully");
+                } catch (emailError) {
+                    console.error("Failed to send account lock email:", emailError);
+                }
+                
+                // Return locked account message
+                const lockTime = 15; // default 15 minutes lock time
+                return res.status(401).json({
+                    error: `Account temporarily locked. Please try again in ${lockTime} minutes.`,
+                    accountLocked: true,
+                    lockTime
+                });
+            }
+            // Not locked but should send warning after 3 attempts
+            else if (user.loginAttempts >= 3) {
+                try {
+                    console.log(`Sending warning email to ${user.email}, attempts: ${user.loginAttempts}`);
+                    await sendLoginWarningEmail(user.email, user.loginAttempts, false);
                     console.log("Warning email sent successfully");
                 } catch (emailError) {
                     console.error("Failed to send warning email:", emailError);
-                    // Continue with login flow even if email fails
                 }
             }
 
@@ -150,15 +167,33 @@ router.post('/login', async (req, res) => {
                 // Increment failed login attempts for incorrect 2FA codes too
                 await user.incrementLoginAttempts();
 
-                if (user.loginAttempts >= 3) {
-                    const isLocked = user.loginAttempts >= 5;
+                // Check if this attempt caused the account to be locked
+                if (user.loginAttempts >= 5) {
+                    // Account should be locked now
                     try {
-                        console.log(`Sending 2FA warning email to ${user.email}, attempts: ${user.loginAttempts}, locked: ${isLocked}`);
-                        await sendLoginWarningEmail(user.email, user.loginAttempts, isLocked);
+                        console.log(`Account locked for ${user.email} after 2FA failure, sending email notification`);
+                        await sendLoginWarningEmail(user.email, user.loginAttempts, true);
+                        console.log("Account lock email sent successfully");
+                    } catch (emailError) {
+                        console.error("Failed to send account lock email:", emailError);
+                    }
+                    
+                    // Return locked account message
+                    const lockTime = 15; // default 15 minutes lock time
+                    return res.status(401).json({
+                        error: `Account temporarily locked. Please try again in ${lockTime} minutes.`,
+                        accountLocked: true,
+                        lockTime
+                    });
+                }
+                // Not locked but should send warning after 3 attempts
+                else if (user.loginAttempts >= 3) {
+                    try {
+                        console.log(`Sending 2FA warning email to ${user.email}, attempts: ${user.loginAttempts}`);
+                        await sendLoginWarningEmail(user.email, user.loginAttempts, false);
                         console.log("2FA warning email sent successfully");
                     } catch (emailError) {
                         console.error("Failed to send 2FA warning email:", emailError);
-                        // Continue with login flow even if email fails
                     }
                 }
 
@@ -404,6 +439,117 @@ router.post('/resend-verification', async (req, res) => {
         await sendVerificationEmail(email, otp);
 
         res.json({ message: 'Verification email resent successfully' });
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// Admin routes for user management
+// Search for users by email or phone number (admin only)
+router.get('/search', auth, async (req, res) => {
+    try {
+        // Check if user is admin
+        if (req.user.role !== 'Admin') {
+            return res.status(403).json({ error: 'Access denied. Only administrators can search users.' });
+        }
+
+        const { query } = req.query;
+        
+        if (!query) {
+            return res.status(400).json({ error: 'Search query is required' });
+        }
+
+        // Search by email or phone
+        const users = await User.find({
+            $or: [
+                { email: { $regex: query, $options: 'i' } }, // Case-insensitive search
+                { phone: { $regex: query, $options: 'i' } }
+            ],
+            role: 'Cashier' // Only search for cashier users
+        }).select('-password -twoFactorSecret'); // Exclude sensitive fields
+
+        // Transform the user objects to have consistent property names
+        const transformedUsers = users.map(user => ({
+            id: user._id,
+            name: user.name,
+            email: user.email,
+            phone: user.phone,
+            role: user.role,
+            isEmailVerified: user.isEmailVerified,
+            isTwoFactorEnabled: user.isTwoFactorEnabled,
+            loginAttempts: user.loginAttempts,
+            lockUntil: user.lockUntil
+        }));
+
+        res.json(transformedUsers);
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// Get user details by ID (admin only)
+router.get('/:id', auth, async (req, res) => {
+    try {
+        // Check if user is admin
+        if (req.user.role !== 'Admin') {
+            return res.status(403).json({ error: 'Access denied. Only administrators can view user details.' });
+        }
+
+        const user = await User.findById(req.params.id).select('-password -twoFactorSecret');
+        
+        if (!user) {
+            return res.status(404).json({ error: 'User not found' });
+        }
+
+        // Only allow viewing cashier users
+        if (user.role !== 'Cashier') {
+            return res.status(403).json({ error: 'Access denied. Can only view cashier users.' });
+        }
+
+        // Transform the user object to include all necessary fields
+        const userResponse = {
+            id: user._id,
+            name: user.name,
+            email: user.email,
+            phone: user.phone,
+            role: user.role,
+            isEmailVerified: user.isEmailVerified,
+            isTwoFactorEnabled: user.isTwoFactorEnabled,
+            loginAttempts: user.loginAttempts,
+            lockUntil: user.lockUntil,
+            createdAt: user.createdAt,
+            updatedAt: user.updatedAt
+        };
+
+        res.json(userResponse);
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// Delete user by ID (admin only)
+router.delete('/:id', auth, async (req, res) => {
+    try {
+        // Check if user is admin
+        if (req.user.role !== 'Admin') {
+            return res.status(403).json({ error: 'Access denied. Only administrators can delete users.' });
+        }
+
+        const user = await User.findById(req.params.id);
+        
+        if (!user) {
+            return res.status(404).json({ error: 'User not found' });
+        }
+
+        // Only allow deleting cashier users
+        if (user.role !== 'Cashier') {
+            return res.status(403).json({ error: 'Access denied. Can only delete cashier users.' });
+        }
+
+        // Delete the user
+        await User.findByIdAndDelete(req.params.id);
+
+        res.json({ message: 'User deleted successfully' });
     } catch (error) {
         res.status(500).json({ error: error.message });
     }
