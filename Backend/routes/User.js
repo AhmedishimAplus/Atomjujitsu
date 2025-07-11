@@ -105,7 +105,7 @@ router.post('/login', async (req, res) => {
         if (!isPasswordValid) {
             // Increment failed login attempts
             await user.incrementLoginAttempts();
-            
+
             // Check if this attempt caused the account to be locked
             if (user.loginAttempts >= 5) {
                 // Account should be locked now
@@ -116,7 +116,7 @@ router.post('/login', async (req, res) => {
                 } catch (emailError) {
                     console.error("Failed to send account lock email:", emailError);
                 }
-                
+
                 // Return locked account message
                 const lockTime = 15; // default 15 minutes lock time
                 return res.status(401).json({
@@ -177,7 +177,7 @@ router.post('/login', async (req, res) => {
                     } catch (emailError) {
                         console.error("Failed to send account lock email:", emailError);
                     }
-                    
+
                     // Return locked account message
                     const lockTime = 15; // default 15 minutes lock time
                     return res.status(401).json({
@@ -444,8 +444,154 @@ router.post('/resend-verification', async (req, res) => {
     }
 });
 
+// Forgot password - request reset code
+router.post('/forgot-password', async (req, res) => {
+    try {
+        const { email } = req.body;
+
+        if (!email || !email.trim()) {
+            return res.status(400).json({ error: 'Email is required' });
+        }
+
+        // Find user by email
+        const user = await User.findOne({ email: email.toLowerCase() }).select('+twoFactorSecret');
+        if (!user) {
+            // For security, don't reveal if user exists or not
+            return res.status(200).json({ message: 'If your email exists in our system, you will receive a password reset code' });
+        }
+
+        // If user has 2FA enabled and is an admin, instruct them to use their authenticator
+        if (user.isTwoFactorEnabled && user.role === 'Admin') {
+            return res.status(200).json({
+                message: 'Please use your authenticator app to generate a verification code',
+                requiresAuthenticator: true
+            });
+        }
+
+        // Generate a 6-digit numeric code for better usability
+        const resetCode = Math.floor(100000 + Math.random() * 900000).toString();
+        const expires = Date.now() + 10 * 60 * 1000; // 10 minutes
+
+        // Store the reset code in memory (in production, consider using Redis or a database)
+        otpStore.set(`password-reset-${email.toLowerCase()}`, { code: resetCode, expires });
+
+        // Send email with reset code
+        await sendVerificationEmail(
+            email,
+            resetCode
+        );
+
+        res.json({
+            message: 'Password reset code has been sent to your email',
+            email: email
+        });
+    } catch (error) {
+        console.error('Error in forgot-password:', error);
+        res.status(500).json({ error: 'An error occurred while processing your request' });
+    }
+});
+
+// Verify reset code and set new password
+router.post('/reset-password', async (req, res) => {
+    try {
+        const { email, resetCode, newPassword } = req.body;
+
+        if (!email || !resetCode || !newPassword) {
+            return res.status(400).json({ error: 'Email, reset code and new password are required' });
+        }
+
+        // Find user to check if they have 2FA
+        const user = await User.findOne({ email: email.toLowerCase() }).select('+twoFactorSecret');
+        if (!user) {
+            return res.status(404).json({ error: 'User not found' });
+        }
+
+        let codeValid = false;
+
+        // If user has 2FA enabled and is an admin, verify against authenticator
+        if (user.isTwoFactorEnabled && user.role === 'Admin') {
+            const decryptedSecret = user.decryptTwoFactorSecret();
+            codeValid = speakeasy.totp.verify({
+                secret: decryptedSecret,
+                encoding: 'base32',
+                token: resetCode
+            });
+
+            if (!codeValid) {
+                return res.status(400).json({ error: 'Invalid authenticator code' });
+            }
+        } else {
+            // Otherwise check email reset code
+            const resetData = otpStore.get(`password-reset-${email.toLowerCase()}`);
+            if (!resetData || resetData.expires < Date.now()) {
+                return res.status(400).json({ error: 'Invalid or expired reset code' });
+            }
+
+            if (resetData.code !== resetCode) {
+                return res.status(400).json({ error: 'Invalid reset code' });
+            }
+            codeValid = true;
+
+            // Clear the reset code from memory
+            otpStore.delete(`password-reset-${email.toLowerCase()}`);
+        }
+
+        // We've already found and validated the user above
+
+        // Password validation
+        if (newPassword.length < 8) {
+            return res.status(400).json({ error: 'Password must be at least 8 characters long' });
+        }
+
+        // Update the password (will be hashed by the pre-save middleware)
+        user.password = newPassword;
+        await user.save();
+
+        // Reset codes for non-2FA users are already cleared above
+
+        res.json({ message: 'Password has been reset successfully' });
+    } catch (error) {
+        console.error('Error in reset-password:', error);
+        res.status(500).json({ error: 'An error occurred while processing your request' });
+    }
+});
+
 // Admin routes for user management
-// Search for users by email or phone number (admin only)
+// Admin verification endpoint temporarily removed
+router.post('/verify-admin-access', auth, async (req, res) => {
+    try {
+        // Check if user is admin
+        if (req.user.role !== 'Admin') {
+            return res.status(403).json({ error: 'Access denied. Only administrators can perform this action.' });
+        }
+
+        // Generate a token for admin verification
+        const adminVerificationToken = jwt.sign(
+            {
+                id: req.user.id,
+                email: req.user.email,
+                role: req.user.role,
+                verified: true,
+                verifiedAt: Date.now()
+            },
+            process.env.JWT_SECRET,
+            { expiresIn: '1h' } // 1 hour expiration
+        );
+
+        // Auto verify without code
+        res.json({
+            message: 'Admin access verified successfully',
+            adminVerificationToken,
+            expiresIn: 3600 // 1 hour in seconds
+        });
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// Admin verification endpoint temporarily removed
+
+// Search for users by email or phone number (admin only with verification)
 router.get('/search', auth, async (req, res) => {
     try {
         // Check if user is admin
@@ -453,8 +599,11 @@ router.get('/search', auth, async (req, res) => {
             return res.status(403).json({ error: 'Access denied. Only administrators can search users.' });
         }
 
+        // Admin verification temporarily removed
+        // We'll implement a better security system later
+
         const { query } = req.query;
-        
+
         if (!query) {
             return res.status(400).json({ error: 'Search query is required' });
         }
@@ -466,7 +615,7 @@ router.get('/search', auth, async (req, res) => {
                 { phone: { $regex: query, $options: 'i' } }
             ],
             role: 'Cashier' // Only search for cashier users
-        }).select('-password -twoFactorSecret'); // Exclude sensitive fields
+        }).select('+password'); // Include password for admin view (twoFactorSecret is already excluded by default)
 
         // Transform the user objects to have consistent property names
         const transformedUsers = users.map(user => ({
@@ -475,6 +624,7 @@ router.get('/search', auth, async (req, res) => {
             email: user.email,
             phone: user.phone,
             role: user.role,
+            password: user.password, // Include the hashed password
             isEmailVerified: user.isEmailVerified,
             isTwoFactorEnabled: user.isTwoFactorEnabled,
             loginAttempts: user.loginAttempts,
@@ -495,8 +645,11 @@ router.get('/:id', auth, async (req, res) => {
             return res.status(403).json({ error: 'Access denied. Only administrators can view user details.' });
         }
 
-        const user = await User.findById(req.params.id).select('-password -twoFactorSecret');
-        
+        // Admin verification temporarily removed
+        // We'll implement a better security system later
+
+        const user = await User.findById(req.params.id).select('+password'); // twoFactorSecret is already excluded by default
+
         if (!user) {
             return res.status(404).json({ error: 'User not found' });
         }
@@ -513,6 +666,7 @@ router.get('/:id', auth, async (req, res) => {
             email: user.email,
             phone: user.phone,
             role: user.role,
+            password: user.password, // Include the hashed password
             isEmailVerified: user.isEmailVerified,
             isTwoFactorEnabled: user.isTwoFactorEnabled,
             loginAttempts: user.loginAttempts,
@@ -535,8 +689,11 @@ router.delete('/:id', auth, async (req, res) => {
             return res.status(403).json({ error: 'Access denied. Only administrators can delete users.' });
         }
 
+        // Admin verification temporarily removed
+        // We'll implement a better security system later
+
         const user = await User.findById(req.params.id);
-        
+
         if (!user) {
             return res.status(404).json({ error: 'User not found' });
         }

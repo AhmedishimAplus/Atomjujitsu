@@ -21,7 +21,7 @@ export function getTokenExpiration(token: string): number | null {
     }
 }
 
-export function getUserFromToken(token: string): { id: string; email: string; role: UserRole; name?: string; isTwoFactorEnabled?: boolean } | null {
+export function getUserFromToken(token: string): { id: string; email: string; role: UserRole; name?: string; isTwoFactorEnabled?: boolean; isEmailVerified?: boolean } | null {
     try {
         const decoded = jwtDecode<JwtPayload>(token);
         if (decoded && decoded.id && decoded.email && decoded.role) {
@@ -30,7 +30,8 @@ export function getUserFromToken(token: string): { id: string; email: string; ro
                 email: decoded.email,
                 role: decoded.role,
                 name: decoded.name,
-                isTwoFactorEnabled: decoded.isTwoFactorEnabled
+                isTwoFactorEnabled: decoded.isTwoFactorEnabled,
+                isEmailVerified: decoded.isEmailVerified
             };
         }
         return null;

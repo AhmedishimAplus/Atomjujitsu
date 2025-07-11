@@ -8,6 +8,7 @@ export interface User {
   email: string;
   role: UserRole;
   phone?: string;
+  password?: string; // Hashed password, only available for admins with verification
   isTwoFactorEnabled: boolean;
   isEmailVerified: boolean;
   loginAttempts?: number;

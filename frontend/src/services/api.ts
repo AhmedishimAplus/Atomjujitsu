@@ -200,9 +200,13 @@ export const disable2FA = async (token: string) => {
   return response.data;
 };
 
-// User Management (Admin only)
+
+
+// Enhanced User Management with Verification
 export const searchUsers = async (query: string) => {
-  const response = await api.get(`/users/search`, { params: { query } });
+  const response = await api.get(`/users/search`, {
+    params: { query }
+  });
   return response.data;
 };
 
@@ -213,6 +217,17 @@ export const getUserById = async (id: string) => {
 
 export const deleteUser = async (id: string) => {
   const response = await api.delete(`/users/${id}`);
+  return response.data;
+};
+
+// Password Reset
+export const requestPasswordReset = async (email: string) => {
+  const response = await api.post('/users/forgot-password', { email });
+  return response.data;
+};
+
+export const resetPassword = async (email: string, resetCode: string, newPassword: string) => {
+  const response = await api.post('/users/reset-password', { email, resetCode, newPassword });
   return response.data;
 };
 

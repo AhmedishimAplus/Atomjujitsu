@@ -8,6 +8,7 @@ import LoginPage from './components/LoginPage';
 import SignupPage from './components/SignupPage';
 import VerifyEmailPage from './components/VerifyEmailPage';
 import TwoFactorVerification from './components/TwoFactorVerification';
+import ForgotPasswordPage from './components/ForgotPasswordPage';
 import { getUserFromToken } from './utils/jwt';
 
 const AppContent: React.FC = () => {
@@ -24,7 +25,8 @@ const AppContent: React.FC = () => {
           payload: {
             ...userData,
             name: userData.name || userData.email.split('@')[0], // Use email username as name for display if name is missing
-            isTwoFactorEnabled: Boolean(userData.isTwoFactorEnabled) // Make sure it's a boolean
+            isTwoFactorEnabled: Boolean(userData.isTwoFactorEnabled), // Make sure it's a boolean
+            isEmailVerified: Boolean(userData.isEmailVerified) // Make sure it's a boolean
           }
         });
 
@@ -56,6 +58,7 @@ const AppContent: React.FC = () => {
         <Route path="/signup" element={<SignupPage />} />
         <Route path="/verify-email" element={<VerifyEmailPage />} />
         <Route path="/verify-2fa" element={<TwoFactorVerification />} />
+        <Route path="/forgot-password" element={<ForgotPasswordPage />} />
         <Route
           path="/*"
           element={
