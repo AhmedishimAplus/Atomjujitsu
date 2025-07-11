@@ -8,7 +8,7 @@ const app = express();
 // CORS configuration
 const corsOptions = {
     origin: process.env.NODE_ENV === 'production'
-        ? ['https://your-frontend-domain.vercel.app'] // Replace with your Vercel frontend domain
+        ? ['https://atomjujitsupos.onrender.com', 'https://your-frontend-domain.vercel.app'] // Include Render deployed frontend
         : 'http://localhost:5173', // Vite's default port
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH'],
