@@ -5,18 +5,44 @@ require('dotenv').config();
 
 const app = express();
 
-// CORS configuration
-const corsOptions = {
-    origin: process.env.NODE_ENV === 'production'
-        ? ['https://atomjujitsupos.onrender.com', 'https://your-frontend-domain.vercel.app'] // Include Render deployed frontend
-        : 'http://localhost:5173', // Vite's default port
-    credentials: true,
-    methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH'],
-    allowedHeaders: ['Content-Type', 'Authorization']
-};
+// Set up CORS with a dynamic origin that responds with the requesting origin
+app.use((req, res, next) => {
+    const allowedOrigins = [
+        'https://atomjujitsupos.onrender.com',
+        'http://localhost:5173'
+    ];
 
-// Middleware
-app.use(cors(corsOptions));
+    const origin = req.headers.origin;
+    console.log(`Request from origin: ${origin}`);
+
+    // If it's a specific route we want to debug
+    if (req.path.includes('/users/login')) {
+        console.log('Login request detected');
+        console.log('Request headers:', req.headers);
+    }
+
+    // Either set specific origin or allow all origins with *
+    if (allowedOrigins.includes(origin)) {
+        res.setHeader('Access-Control-Allow-Origin', origin);
+        console.log(`Allowed CORS for origin: ${origin}`);
+    } else {
+        // For development and troubleshooting, allow any origin
+        // Comment this out or remove in final production
+        res.setHeader('Access-Control-Allow-Origin', '*');
+        console.log(`Using wildcard CORS as origin ${origin} not in allowed list`);
+    }
+
+    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, PATCH, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+    res.setHeader('Access-Control-Allow-Credentials', 'true');
+
+    if (req.method === 'OPTIONS') {
+        console.log('Responding to OPTIONS request');
+        return res.status(200).end();
+    }
+
+    next();
+});
 app.use(express.json());
 
 // MongoDB Connection with retry logic
@@ -57,10 +83,17 @@ app.use('/api/admin', adminRoutes); // Use admin routes
 
 // Basic health check route
 app.get('/', (req, res) => {
+    const allowedOrigins = [
+        'https://atomjujitsupos.onrender.com',
+        'http://localhost:5173'
+    ];
+
     res.json({
         status: 'API is running',
         environment: process.env.NODE_ENV,
-        timestamp: new Date().toISOString()
+        timestamp: new Date().toISOString(),
+        corsAllowedOrigins: allowedOrigins,
+        requestOrigin: req.headers.origin || 'Not provided in request'
     });
 });
 
