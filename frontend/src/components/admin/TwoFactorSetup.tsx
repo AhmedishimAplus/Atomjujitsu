@@ -14,7 +14,9 @@ const TwoFactorSetup: React.FC = () => {
   const [qrCode, setQrCode] = useState<string | null>(null);
   const [secret, setSecret] = useState<string | null>(null);
   const [verificationCode, setVerificationCode] = useState('');
+  const [disableVerificationCode, setDisableVerificationCode] = useState('');
   const [setupStep, setSetupStep] = useState<'initial' | 'verify' | 'complete'>('initial');
+  const [disableStep, setDisableStep] = useState<'initial' | 'verify'>('initial');
   const [is2FAEnabled, setIs2FAEnabled] = useState(state.user?.isTwoFactorEnabled || false);
 
   // Make sure the 2FA state is in sync with the user context
@@ -70,15 +72,32 @@ const TwoFactorSetup: React.FC = () => {
       setLoading(false);
     }
   };
+  const initiateDisable = () => {
+    setDisableStep('verify');
+    setError('');
+  };
+
   const disableTwoFactor = async () => {
     try {
+      if (disableStep === 'initial') {
+        initiateDisable();
+        return;
+      }
+
+      if (!disableVerificationCode || disableVerificationCode.length !== 6) {
+        setError('Please enter a valid 6-digit verification code');
+        return;
+      }
+
       setLoading(true);
       setError('');
-      await disable2FA();
+      await disable2FA(disableVerificationCode);
       setSuccess('Two-factor authentication has been disabled successfully!');
       setQrCode(null);
       setSecret(null);
       setSetupStep('initial');
+      setDisableStep('initial');
+      setDisableVerificationCode('');
       setIs2FAEnabled(false); // Update local state
 
       // Update the user in context with 2FA disabled
@@ -127,14 +146,51 @@ const TwoFactorSetup: React.FC = () => {
               <h2 className="text-xl font-semibold mb-2">Two-Factor Authentication is Enabled</h2>
               <p className="text-gray-600">Your account is currently protected with two-factor authentication.</p>
             </div>
-
-            <Button
-              onClick={disableTwoFactor}
-              className="bg-red-600 hover:bg-red-700 text-white"
-              disabled={loading}
-            >
-              {loading ? 'Processing...' : 'Disable Two-Factor Authentication'}
-            </Button>
+            
+            {disableStep === 'verify' ? (
+              <div>
+                <div className="mb-6">
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Enter your current 6-digit verification code to confirm:
+                  </label>
+                  <Input
+                    type="text"
+                    value={disableVerificationCode}
+                    onChange={(e) => setDisableVerificationCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                    placeholder="000000"
+                    className="w-full text-center"
+                    maxLength={6}
+                  />
+                  <p className="text-sm text-gray-500 mt-1">
+                    For security reasons, you must verify your identity before disabling 2FA.
+                  </p>
+                </div>
+                
+                <div className="flex space-x-2">
+                  <Button
+                    onClick={() => setDisableStep('initial')}
+                    className="border border-gray-300 bg-white text-gray-700 hover:bg-gray-50"
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    onClick={disableTwoFactor}
+                    className="bg-red-600 hover:bg-red-700 text-white"
+                    disabled={loading || disableVerificationCode.length !== 6}
+                  >
+                    {loading ? 'Verifying...' : 'Confirm Disable'}
+                  </Button>
+                </div>
+              </div>
+            ) : (
+              <Button
+                onClick={disableTwoFactor}
+                className="bg-red-600 hover:bg-red-700 text-white"
+                disabled={loading}
+              >
+                {loading ? 'Processing...' : 'Disable Two-Factor Authentication'}
+              </Button>
+            )}
           </div>
         ) : (
           <>

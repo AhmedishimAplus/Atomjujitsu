@@ -6,7 +6,7 @@ try {
     if (!process.env.EMAIL_USER || !process.env.EMAIL_APP_PASSWORD) {
         console.error('EMAIL_USER or EMAIL_APP_PASSWORD environment variables are not set');
     }
-    
+
     transporter = nodemailer.createTransport({
         service: 'gmail',
         auth: {
@@ -14,9 +14,9 @@ try {
             pass: process.env.EMAIL_APP_PASSWORD
         }
     });
-    
+
     // Verify the connection configuration
-    transporter.verify(function(error, success) {
+    transporter.verify(function (error, success) {
         if (error) {
             console.error('SMTP connection error:', error);
         } else {
@@ -65,14 +65,14 @@ const sendLoginWarningEmail = async (email, attempts, isLocked) => {
             console.error('Email transporter not initialized');
             return Promise.reject(new Error('Email transporter not initialized'));
         }
-        
+
         if (!email) {
             console.error('No email address provided for warning email');
             return Promise.reject(new Error('No email address provided'));
         }
-        
+
         console.log(`Preparing login warning email to ${email} (Attempts: ${attempts}, Locked: ${isLocked})`);
-        
+
         const mailOptions = {
             from: process.env.EMAIL_USER || 'noreply@atomjujitsu.com',
             to: email,

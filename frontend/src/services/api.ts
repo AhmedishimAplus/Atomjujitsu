@@ -195,8 +195,8 @@ export const verify2FASetup = async (token: string) => {
   return response.data;
 };
 
-export const disable2FA = async () => {
-  const response = await api.post('/users/disable-2fa');
+export const disable2FA = async (token: string) => {
+  const response = await api.post('/users/disable-2fa', { token });
   return response.data;
 };
 

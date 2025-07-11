@@ -36,7 +36,7 @@ async function testEmailConnection() {
                 <p>Time: ${new Date().toISOString()}</p>
             `
         });
-        
+
         console.log('✓ Test email sent successfully');
         console.log(`Message ID: ${info.messageId}`);
     } catch (error) {
