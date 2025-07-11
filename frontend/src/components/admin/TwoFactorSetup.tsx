@@ -146,7 +146,7 @@ const TwoFactorSetup: React.FC = () => {
               <h2 className="text-xl font-semibold mb-2">Two-Factor Authentication is Enabled</h2>
               <p className="text-gray-600">Your account is currently protected with two-factor authentication.</p>
             </div>
-            
+
             {disableStep === 'verify' ? (
               <div>
                 <div className="mb-6">
@@ -165,7 +165,7 @@ const TwoFactorSetup: React.FC = () => {
                     For security reasons, you must verify your identity before disabling 2FA.
                   </p>
                 </div>
-                
+
                 <div className="flex space-x-2">
                   <Button
                     onClick={() => setDisableStep('initial')}

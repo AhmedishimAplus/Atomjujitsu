@@ -265,27 +265,27 @@ router.post('/verify-2fa-setup', auth, async (req, res) => {
 router.post('/disable-2fa', auth, async (req, res) => {
     try {
         const { token } = req.body;
-        
+
         // Check if token is provided
         if (!token) {
             return res.status(400).json({ error: 'Verification code is required to disable 2FA' });
         }
-        
+
         const user = await User.findById(req.user.id).select('+twoFactorSecret');
 
         if (!user.isTwoFactorEnabled) {
             return res.status(400).json({ error: '2FA is not enabled for this account' });
         }
-        
+
         // Verify the token before disabling 2FA
         const decryptedSecret = user.decryptTwoFactorSecret();
-        
+
         const verified = speakeasy.totp.verify({
             secret: decryptedSecret,
             encoding: 'base32',
             token
         });
-        
+
         if (!verified) {
             return res.status(400).json({ error: 'Invalid verification code. Please enter the current code from your authenticator app.' });
         }
