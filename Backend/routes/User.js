@@ -101,6 +101,14 @@ router.post('/login', async (req, res) => {
             });
         }
 
+        // If lockout period has expired but loginAttempts still has a value, reset it
+        if (user.lockUntil && user.lockUntil <= Date.now() && user.loginAttempts > 0) {
+            console.log(`Resetting login attempts for ${user.email} as lockout period has expired`);
+            user.loginAttempts = 0;
+            user.lockUntil = null;
+            await user.save();
+        }
+
         const isPasswordValid = await user.comparePassword(password);
         if (!isPasswordValid) {
             // Increment failed login attempts

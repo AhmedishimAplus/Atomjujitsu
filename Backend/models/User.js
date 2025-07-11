@@ -51,6 +51,40 @@ const userSchema = new mongoose.Schema({
     timestamps: true
 });
 
+// Pre-find hook to check if lockout period has expired
+userSchema.pre('findOne', async function () {
+    // Add a query condition to identify users whose lockout period has expired
+    // but still have login attempts > 0
+    const now = new Date();
+    this.or([
+        { lockUntil: { $exists: false } },
+        { lockUntil: null },
+        { lockUntil: { $gt: now } },
+        // This is the important part: find users whose lockout has expired
+        {
+            $and: [
+                { lockUntil: { $lt: now } },
+                { loginAttempts: { $gt: 0 } }
+            ]
+        }
+    ]);
+});
+
+// Hook that runs after finding a user to reset login attempts if lockout has expired
+userSchema.post('findOne', async function (result, next) {
+    if (!result) return next();
+
+    // If the user's lockout period has expired but they still have login attempts
+    if (result.lockUntil && result.lockUntil < Date.now() && result.loginAttempts > 0) {
+        console.log(`Auto-resetting login attempts for ${result.email} after lockout period expired`);
+        result.loginAttempts = 0;
+        result.lockUntil = null;
+        await result.save();
+    }
+
+    next();
+});
+
 // Hash password before saving
 userSchema.pre('save', async function (next) {
     const user = this;
@@ -121,6 +155,10 @@ userSchema.methods.incrementLoginAttempts = async function () {
 
 // Method to check if account is locked
 userSchema.methods.isLocked = function () {
+    // If lockout has expired, consider account unlocked
+    if (this.lockUntil && this.lockUntil <= Date.now()) {
+        return false;
+    }
     return this.lockUntil && this.lockUntil > Date.now();
 };
 
