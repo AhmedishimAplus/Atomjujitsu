@@ -4,6 +4,7 @@ export type UserRole = 'Admin' | 'Cashier';
 
 export interface User {
   id: string;
+  _id?: string; // MongoDB ID
   name: string;
   email: string;
   role: UserRole;
@@ -11,6 +12,7 @@ export interface User {
   password?: string; // Hashed password, only available for admins with verification
   isTwoFactorEnabled: boolean;
   isEmailVerified: boolean;
+  isApproved?: boolean; // Added for cashier approval system
   loginAttempts?: number;
   lockUntil?: Date | null;
   createdAt?: string;

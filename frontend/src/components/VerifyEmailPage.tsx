@@ -9,6 +9,7 @@ const VerifyEmailPage: React.FC = () => {
     const [email, setEmail] = useState('');
     const [error, setError] = useState('');
     const [loading, setLoading] = useState(false);
+    const [requiresApproval, setRequiresApproval] = useState(false);
     const navigate = useNavigate();
     const location = useLocation();
 
@@ -16,8 +17,14 @@ const VerifyEmailPage: React.FC = () => {
         // Extract email from URL query parameters
         const params = new URLSearchParams(location.search);
         const emailParam = params.get('email');
+        const approvalParam = params.get('requiresApproval');
+
         if (emailParam) {
             setEmail(emailParam);
+        }
+
+        if (approvalParam === 'true') {
+            setRequiresApproval(true);
         }
 
         // Focus on the first input when the component mounts
@@ -41,8 +48,15 @@ const VerifyEmailPage: React.FC = () => {
 
         try {
             await verifyEmail(email, otpValue);
-            // Redirect to login page after successful verification
-            navigate('/login?verified=true');
+
+            // Different flows based on whether admin approval is needed
+            if (requiresApproval) {
+                // If admin approval is needed, show a special success page
+                navigate('/email-verified-pending-approval');
+            } else {
+                // Regular flow - redirect to login page after successful verification
+                navigate('/login?verified=true');
+            }
         } catch (err: any) {
             setError(err.response?.data?.error || 'Verification failed');
         } finally {

@@ -1,320 +1,356 @@
 import React, { useState, useEffect } from 'react';
-import { searchUsers, getUserById, deleteUser } from '../../services/api';
+import { getCashiers, getCashierDetails, approveCashier, deleteCashier } from '../../services/api';
 import { User } from '../../types';
 import Button from '../ui/Button';
-import Input from '../ui/Input';
-import { Card } from '../ui/Card';
-import { Search, Trash2, Eye } from 'lucide-react';
+import { Eye, Check, Trash2, AlertCircle } from 'lucide-react';
 import Modal from '../ui/Modal';
-import { useAppContext } from '../../context/AppContext';
+
+// Define a more specific type for cashiers from the API
+interface CashierUser extends User {
+    _id: string; // Make _id required for cashier users from the API
+}
 
 const UserManagement: React.FC = () => {
-    const { state } = useAppContext();
-    const [searchQuery, setSearchQuery] = useState('');
-    const [loading, setLoading] = useState(false);
+    const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
     const [success, setSuccess] = useState('');
-    const [users, setUsers] = useState<User[]>([]);
-    const [selectedUser, setSelectedUser] = useState<User | null>(null);
-    const [isModalOpen, setIsModalOpen] = useState(false);
+    const [cashiers, setCashiers] = useState<CashierUser[]>([]);
+    const [selectedCashier, setSelectedCashier] = useState<CashierUser | null>(null);
+    const [isDetailsModalOpen, setIsDetailsModalOpen] = useState(false);
     const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
-    const [userToDelete, setUserToDelete] = useState<User | null>(null);
+    const [cashierToDelete, setCashierToDelete] = useState<CashierUser | null>(null);
 
-    const handleSearch = async (e?: React.FormEvent) => {
-        if (e) e.preventDefault();
+    // Load cashiers on component mount
+    useEffect(() => {
+        loadCashiers();
+    }, []);
 
-        if (!searchQuery.trim()) {
-            setError('Please enter an email or phone number to search');
-            return;
-        }
-
+    const loadCashiers = async () => {
         try {
             setLoading(true);
             setError('');
-            setSuccess('');
-            const result = await searchUsers(searchQuery);
-            setUsers(result);
+            const data = await getCashiers();
+            setCashiers(data);
 
-            if (result.length === 0) {
-                setError('No users found matching your search criteria');
+            if (data.length === 0) {
+                setError('No cashiers found in the system');
             }
         } catch (err: any) {
-            setError(err.response?.data?.error || 'Failed to search users');
+            setError(err.response?.data?.error || 'Failed to load cashiers');
+            console.error('Error loading cashiers:', err);
         } finally {
             setLoading(false);
         }
     };
 
-    const handleViewUser = async (userId: string) => {
+    const handleViewCashier = async (cashierId: string) => {
         try {
             setLoading(true);
             setError('');
-            const user = await getUserById(userId);
-            setSelectedUser(user);
-            setIsModalOpen(true);
+            const cashier = await getCashierDetails(cashierId);
+            setSelectedCashier(cashier);
+            setIsDetailsModalOpen(true);
         } catch (err: any) {
-            setError(err.response?.data?.error || 'Failed to get user details');
+            setError(err.response?.data?.error || 'Failed to get cashier details');
         } finally {
             setLoading(false);
         }
     };
 
-    const handleDeleteClick = (user: User) => {
-        setUserToDelete(user);
+    const handleApproveCashier = async (cashierId: string) => {
+        try {
+            setLoading(true);
+            setError('');
+            await approveCashier(cashierId);
+            setSuccess('Cashier approved successfully');
+
+            // Refresh the cashier list
+            await loadCashiers();
+
+            // Close the details modal if it's open
+            if (isDetailsModalOpen) {
+                setIsDetailsModalOpen(false);
+            }
+
+            // Show success message for 3 seconds
+            setTimeout(() => {
+                setSuccess('');
+            }, 3000);
+        } catch (err: any) {
+            setError(err.response?.data?.error || 'Failed to approve cashier');
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const openDeleteModal = (cashier: CashierUser) => {
+        setCashierToDelete(cashier);
         setIsDeleteModalOpen(true);
     };
 
-    const handleDeleteUser = async () => {
-        if (!userToDelete) return;
+    const handleDeleteCashier = async () => {
+        if (!cashierToDelete || !cashierToDelete._id) return;
 
         try {
             setLoading(true);
             setError('');
-            await deleteUser(userToDelete.id);
-            setSuccess(`User ${userToDelete.name} was deleted successfully`);
-            setUsers(users.filter(user => user.id !== userToDelete.id));
+            await deleteCashier(cashierToDelete._id);
+            setSuccess('Cashier deleted successfully');
+
+            // Refresh the cashier list
+            await loadCashiers();
+
+            // Close the delete confirmation modal
             setIsDeleteModalOpen(false);
-            setUserToDelete(null);
+            setCashierToDelete(null);
+
+            // Close the details modal if it's open
+            if (isDetailsModalOpen) {
+                setIsDetailsModalOpen(false);
+                setSelectedCashier(null);
+            }
+
+            // Show success message for 3 seconds
+            setTimeout(() => {
+                setSuccess('');
+            }, 3000);
         } catch (err: any) {
-            setError(err.response?.data?.error || 'Failed to delete user');
+            setError(err.response?.data?.error || 'Failed to delete cashier');
         } finally {
             setLoading(false);
         }
     };
 
-    // Auto-dismiss success messages after a few seconds
-    useEffect(() => {
-        if (success) {
-            const timer = setTimeout(() => {
-                setSuccess('');
-            }, 5000); // 5 seconds
-            return () => clearTimeout(timer);
-        }
-    }, [success]);
+    const formatDate = (dateString: string | undefined) => {
+        return dateString ? new Date(dateString).toLocaleString() : 'Unknown';
+    };
 
     return (
         <div className="container mx-auto p-4">
             <h1 className="text-2xl font-bold mb-6">User Management</h1>
+            <p className="text-gray-600 mb-6">Manage cashier accounts. As an admin, you can approve new cashiers or remove existing ones.</p>
 
-            {error ? (
-                <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4">
-                    {error}
-                </div>
-            ) : null}
-
-            {success && (
-                <div className="bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded mb-4">
-                    {success}
+            {error && (
+                <div className="bg-red-100 border-l-4 border-red-500 text-red-700 p-4 mb-6" role="alert">
+                    <div className="flex items-center">
+                        <AlertCircle className="h-5 w-5 mr-2" />
+                        <p>{error}</p>
+                    </div>
                 </div>
             )}
 
-            <Card className="bg-white p-6 rounded-lg shadow-md mb-6">
-                <h2 className="text-xl font-semibold mb-4">Search Users</h2>
-                <form onSubmit={(e) => handleSearch(e)} className="flex gap-2">
-                    <Input
-                        type="text"
-                        value={searchQuery}
-                        onChange={(e) => setSearchQuery(e.target.value)}
-                        placeholder="Search by email or phone number"
-                        className="flex-1"
-                    />
-                    <Button
-                        type="submit"
-                        disabled={loading}
-                        className="bg-blue-600 hover:bg-blue-700 text-white"
-                    >
-                        {loading ? 'Searching...' : (
-                            <div className="flex items-center gap-1">
-                                <Search size={16} />
-                                <span>Search</span>
-                            </div>
-                        )}
-                    </Button>
-                </form>
-                <p className="text-sm text-gray-500 mt-2">
-                    Enter an email address or phone number to search for a specific cashier.
-                </p>
-            </Card>
+            {success && (
+                <div className="bg-green-100 border-l-4 border-green-500 text-green-700 p-4 mb-6" role="alert">
+                    <p>{success}</p>
+                </div>
+            )}
 
-            {users.length > 0 && (
-                <Card className="bg-white p-6 rounded-lg shadow-md">
-                    <h2 className="text-xl font-semibold mb-4">Search Results</h2>
-                    <div className="overflow-x-auto">
-                        <table className="min-w-full bg-white">
-                            <thead>
+            {loading && cashiers.length === 0 ? (
+                <div className="flex justify-center items-center h-64">
+                    <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500"></div>
+                </div>
+            ) : (
+                <div className="bg-white shadow-md rounded-lg overflow-hidden">
+                    <table className="min-w-full divide-y divide-gray-200">
+                        <thead className="bg-gray-50">
+                            <tr>
+                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                    Name
+                                </th>
+                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                    Email
+                                </th>
+                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                    Status
+                                </th>
+                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                    Created
+                                </th>
+                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                    Actions
+                                </th>
+                            </tr>
+                        </thead>
+                        <tbody className="bg-white divide-y divide-gray-200">
+                            {cashiers.length === 0 ? (
                                 <tr>
-                                    <th className="py-2 px-4 border-b text-left">Name</th>
-                                    <th className="py-2 px-4 border-b text-left">Email</th>
-                                    <th className="py-2 px-4 border-b text-left">Phone</th>
-                                    <th className="py-2 px-4 border-b text-left">Verified</th>
-                                    <th className="py-2 px-4 border-b text-left">2FA</th>
-                                    <th className="py-2 px-4 border-b text-center">Actions</th>
+                                    <td colSpan={5} className="px-6 py-4 text-center text-sm font-medium text-gray-500">
+                                        No cashiers found
+                                    </td>
                                 </tr>
-                            </thead>
-                            <tbody>
-                                {users.map(user => (
-                                    <tr key={user.id} className="hover:bg-gray-50">
-                                        <td className="py-2 px-4 border-b">{user.name}</td>
-                                        <td className="py-2 px-4 border-b">{user.email}</td>
-                                        <td className="py-2 px-4 border-b">{user.phone || 'N/A'}</td>
-                                        <td className="py-2 px-4 border-b">
-                                            {user.isEmailVerified ? (
-                                                <span className="text-green-600">Yes</span>
+                            ) : (
+                                cashiers.map((cashier) => (
+                                    <tr key={cashier._id} className="hover:bg-gray-50">
+                                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                                            {cashier.name}
+                                        </td>
+                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                            {cashier.email}
+                                        </td>
+                                        <td className="px-6 py-4 whitespace-nowrap">
+                                            {cashier.isApproved ? (
+                                                <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-100 text-green-800">
+                                                    Approved
+                                                </span>
                                             ) : (
-                                                <span className="text-red-600">No</span>
+                                                <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-yellow-100 text-yellow-800">
+                                                    Pending Approval
+                                                </span>
                                             )}
                                         </td>
-                                        <td className="py-2 px-4 border-b">
-                                            {user.isTwoFactorEnabled ? (
-                                                <span className="text-green-600">Enabled</span>
-                                            ) : (
-                                                <span className="text-gray-500">Disabled</span>
-                                            )}
+                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                            {cashier.createdAt ? new Date(cashier.createdAt).toLocaleDateString() : 'Unknown'}
                                         </td>
-                                        <td className="py-2 px-4 border-b text-center">
-                                            <div className="flex justify-center gap-2">
-                                                <Button
-                                                    onClick={() => handleViewUser(user.id)}
-                                                    className="bg-blue-600 hover:bg-blue-700 text-white p-1"
+                                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                                            <div className="flex space-x-2">
+                                                <button
+                                                    onClick={() => cashier._id ? handleViewCashier(cashier._id) : null}
+                                                    className="text-blue-600 hover:text-blue-900"
                                                     title="View Details"
                                                 >
-                                                    <Eye size={16} />
-                                                </Button>
-                                                <Button
-                                                    onClick={() => handleDeleteClick(user)}
-                                                    className="bg-red-600 hover:bg-red-700 text-white p-1"
-                                                    title="Delete User"
+                                                    <Eye size={18} />
+                                                </button>
+
+                                                {!cashier.isApproved && (<button
+                                                    onClick={() => cashier._id ? handleApproveCashier(cashier._id) : null}
+                                                    className="text-green-600 hover:text-green-900"
+                                                    title="Approve Cashier"
                                                 >
-                                                    <Trash2 size={16} />
-                                                </Button>
+                                                    <Check size={18} />
+                                                </button>
+                                                )}
+
+                                                <button
+                                                    onClick={() => openDeleteModal(cashier)}
+                                                    className="text-red-600 hover:text-red-900"
+                                                    title="Delete Cashier"
+                                                >
+                                                    <Trash2 size={18} />
+                                                </button>
                                             </div>
                                         </td>
                                     </tr>
-                                ))}
-                            </tbody>
-                        </table>
-                    </div>
-                </Card>
+                                ))
+                            )}
+                        </tbody>
+                    </table>
+                </div>
             )}
 
-            {/* User Details Modal */}
-            <Modal
-                isOpen={isModalOpen}
-                onClose={() => setIsModalOpen(false)}
-                title="User Details"
-            >
-                {selectedUser && (
+            {/* Cashier Details Modal */}
+            {selectedCashier && (
+                <Modal
+                    isOpen={isDetailsModalOpen}
+                    onClose={() => {
+                        setIsDetailsModalOpen(false);
+                        setSelectedCashier(null);
+                    }}
+                    title="Cashier Details"
+                >
                     <div className="space-y-4">
                         <div>
-                            <h3 className="font-semibold text-gray-700">Name</h3>
-                            <p>{selectedUser.name}</p>
-                        </div>
-                        <div>
-                            <h3 className="font-semibold text-gray-700">Email</h3>
-                            <p>{selectedUser.email}</p>
-                        </div>
-                        <div>
-                            <h3 className="font-semibold text-gray-700">Phone</h3>
-                            <p>{selectedUser.phone || 'Not provided'}</p>
-                        </div>
-                        <div>
-                            <h3 className="font-semibold text-gray-700">Account Status</h3>
-                            <div className="flex flex-col gap-1">
-                                <p>
-                                    <span className="font-medium">Email Verified:</span>{' '}
-                                    {selectedUser.isEmailVerified ? (
-                                        <span className="text-green-600">Yes</span>
-                                    ) : (
-                                        <span className="text-red-600">No</span>
-                                    )}
-                                </p>
-                                <p>
-                                    <span className="font-medium">2FA Enabled:</span>{' '}
-                                    {selectedUser.isTwoFactorEnabled ? (
-                                        <span className="text-green-600">Yes</span>
-                                    ) : (
-                                        <span className="text-gray-600">No</span>
-                                    )}
-                                </p>
-                                {selectedUser.loginAttempts !== undefined && selectedUser.loginAttempts > 0 && (
-                                    <p>
-                                        <span className="font-medium">Login Attempts:</span>{' '}
-                                        <span className={`${selectedUser.loginAttempts >= 3 ? 'text-red-600' : 'text-gray-600'}`}>
-                                            {selectedUser.loginAttempts}/5
-                                        </span>
-                                    </p>
-                                )}
-                                {selectedUser.lockUntil && new Date(selectedUser.lockUntil) > new Date() && (
-                                    <p>
-                                        <span className="font-medium">Account Locked Until:</span>{' '}
-                                        <span className="text-red-600">
-                                            {new Date(selectedUser.lockUntil).toLocaleString()}
-                                        </span>
-                                    </p>
-                                )}
+                            <h3 className="text-lg font-medium text-gray-900">Personal Information</h3>
+                            <div className="mt-2 grid grid-cols-2 gap-4">
+                                <div>
+                                    <p className="text-sm font-medium text-gray-500">Name</p>
+                                    <p className="mt-1">{selectedCashier.name}</p>
+                                </div>
+                                <div>
+                                    <p className="text-sm font-medium text-gray-500">Email</p>
+                                    <p className="mt-1">{selectedCashier.email}</p>
+                                </div>
+                                <div>
+                                    <p className="text-sm font-medium text-gray-500">Phone</p>
+                                    <p className="mt-1">{selectedCashier.phone || 'Not provided'}</p>
+                                </div>
+                                <div>
+                                    <p className="text-sm font-medium text-gray-500">Created</p>
+                                    <p className="mt-1">{formatDate(selectedCashier.createdAt)}</p>
+                                </div>
                             </div>
                         </div>
+
                         <div>
-                            <h3 className="font-semibold text-gray-700">Password Information</h3>
-                            {selectedUser.password ? (
-                                <div className="bg-blue-50 p-2 rounded border border-blue-200">
-                                    <p className="text-sm text-blue-800 font-mono">
-                                        <span className="font-normal text-blue-600">Hashed Password:</span> {selectedUser.password}
-                                    </p>
-                                    <p className="text-xs mt-1 text-gray-600">
-                                        This is the securely hashed password, not the original password.
-                                    </p>
+                            <h3 className="text-lg font-medium text-gray-900">Account Status</h3>
+                            <div className="mt-2 grid grid-cols-2 gap-4">
+                                <div>
+                                    <p className="text-sm font-medium text-gray-500">Email Verified</p>
+                                    <p className="mt-1">{selectedCashier.isEmailVerified ? 'Yes' : 'No'}</p>
                                 </div>
-                            ) : (
-                                <p className="text-sm text-gray-600 bg-yellow-50 p-2 rounded border border-yellow-200">
-                                    For security reasons, raw passwords are not stored in the system.
-                                    If this user needs a password reset, please instruct them to use the "Forgot Password" option.
-                                </p>
-                            )}
+                                <div>
+                                    <p className="text-sm font-medium text-gray-500">Approved</p>
+                                    <p className="mt-1">{selectedCashier.isApproved ? 'Yes' : 'No'}</p>
+                                </div>
+                                <div>
+                                    <p className="text-sm font-medium text-gray-500">2FA Enabled</p>
+                                    <p className="mt-1">{selectedCashier.isTwoFactorEnabled ? 'Yes' : 'No'}</p>
+                                </div>
+                            </div>
                         </div>
-                        <div className="pt-4 flex justify-end">
+
+                        <div className="flex justify-end space-x-3 mt-6">
+                            {!selectedCashier.isApproved && (
+                                <Button
+                                    onClick={() => handleApproveCashier(selectedCashier._id)}
+                                    className="bg-green-600 hover:bg-green-700 text-white"
+                                >
+                                    Approve Cashier
+                                </Button>
+                            )}
                             <Button
-                                onClick={() => setIsModalOpen(false)}
-                                className="bg-gray-300 hover:bg-gray-400 text-gray-800"
+                                onClick={() => openDeleteModal(selectedCashier)}
+                                className="bg-red-600 hover:bg-red-700 text-white"
+                            >
+                                Delete Cashier
+                            </Button>
+                            <Button
+                                onClick={() => {
+                                    setIsDetailsModalOpen(false);
+                                    setSelectedCashier(null);
+                                }}
+                                className="bg-gray-200 hover:bg-gray-300 text-gray-800"
                             >
                                 Close
                             </Button>
                         </div>
                     </div>
-                )}
-            </Modal>
+                </Modal>
+            )}
 
             {/* Delete Confirmation Modal */}
             <Modal
                 isOpen={isDeleteModalOpen}
-                onClose={() => setIsDeleteModalOpen(false)}
-                title="Confirm Deletion"
+                onClose={() => {
+                    setIsDeleteModalOpen(false);
+                    setCashierToDelete(null);
+                }}
+                title="Confirm Delete"
             >
-                {userToDelete && (
-                    <div className="space-y-4">
-                        <p className="text-gray-700">
-                            Are you sure you want to delete the user <span className="font-semibold">{userToDelete.name}</span> with email <span className="font-semibold">{userToDelete.email}</span>?
-                        </p>
-                        <p className="text-red-600 text-sm">
-                            This action cannot be undone. The user will lose all access to the system.
-                        </p>
-                        <div className="pt-4 flex justify-end gap-2">
-                            <Button
-                                onClick={() => setIsDeleteModalOpen(false)}
-                                className="bg-gray-300 hover:bg-gray-400 text-gray-800"
-                            >
-                                Cancel
-                            </Button>
-                            <Button
-                                onClick={() => handleDeleteUser()}
-                                className="bg-red-600 hover:bg-red-700 text-white"
-                                disabled={loading}
-                            >
-                                {loading ? 'Deleting...' : 'Delete User'}
-                            </Button>
-                        </div>
+                <div className="space-y-4">
+                    <p className="text-gray-700">
+                        Are you sure you want to delete the cashier{' '}
+                        <span className="font-semibold">{cashierToDelete?.name}</span>?
+                    </p>
+                    <p className="text-gray-700">This action cannot be undone.</p>
+
+                    <div className="flex justify-end space-x-3 mt-6">
+                        <Button
+                            onClick={handleDeleteCashier}
+                            className="bg-red-600 hover:bg-red-700 text-white"
+                        >
+                            Delete
+                        </Button>
+                        <Button
+                            onClick={() => {
+                                setIsDeleteModalOpen(false);
+                                setCashierToDelete(null);
+                            }}
+                            className="bg-gray-200 hover:bg-gray-300 text-gray-800"
+                        >
+                            Cancel
+                        </Button>
                     </div>
-                )}
+                </div>
             </Modal>
         </div>
     );

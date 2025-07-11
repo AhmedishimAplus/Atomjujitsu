@@ -231,4 +231,25 @@ export const resetPassword = async (email: string, resetCode: string, newPasswor
   return response.data;
 };
 
+// Admin user management
+export const getCashiers = async () => {
+  const response = await api.get('/admin/cashiers');
+  return response.data;
+};
+
+export const getCashierDetails = async (id: string) => {
+  const response = await api.get(`/admin/cashiers/${id}`);
+  return response.data;
+};
+
+export const approveCashier = async (id: string) => {
+  const response = await api.post(`/admin/cashiers/${id}/approve`);
+  return response.data;
+};
+
+export const deleteCashier = async (id: string) => {
+  const response = await api.delete(`/admin/cashiers/${id}`);
+  return response.data;
+};
+
 export default api;

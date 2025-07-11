@@ -31,6 +31,10 @@ const userSchema = new mongoose.Schema({
         type: Boolean,
         default: false
     },
+    isApproved: {
+        type: Boolean,
+        default: false // New cashiers need admin approval
+    },
     twoFactorSecret: {
         type: String,
         select: false // Don't include in queries by default

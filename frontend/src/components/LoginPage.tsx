@@ -53,6 +53,12 @@ const LoginPage: React.FC = () => {
                 return;
             }
 
+            // Check if account is pending approval
+            if (err.response?.data?.pendingApproval) {
+                setError('Your account is pending approval from an administrator. Please check back later.');
+                return;
+            }
+
             // Check if account is locked
             if (err.response?.data?.accountLocked) {
                 const lockTime = err.response?.data?.lockTime || 15;
@@ -138,6 +144,9 @@ const LoginPage: React.FC = () => {
                             <a href="/signup" className="text-blue-600 hover:underline">
                                 Sign up
                             </a>
+                        </p>
+                        <p className="text-gray-500 text-xs mt-2">
+                            Note: New cashier accounts require admin approval before access is granted
                         </p>
                     </div>
                 </form>

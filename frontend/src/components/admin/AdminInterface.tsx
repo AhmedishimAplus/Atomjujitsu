@@ -5,6 +5,7 @@ import FinancialTracking from './FinancialTracking';
 import AnalyticsDashboard from './AnalyticsDashboard';
 import StaffManagement from './StaffManagement';
 import TwoFactorSetup from './TwoFactorSetup';
+import UserManagement from './UserManagement';
 import { Navigate } from 'react-router-dom';
 
 const AdminInterface: React.FC = () => {
@@ -30,10 +31,7 @@ const AdminInterface: React.FC = () => {
       case '2fa':
         return <TwoFactorSetup />;
       case 'users':
-        return <div className="container mx-auto p-4">
-          <h1 className="text-2xl font-bold mb-6">User Management</h1>
-          <p className="text-lg">This feature has been temporarily removed and will be reimplemented soon.</p>
-        </div>;
+        return <UserManagement />;
       default:
         return <InventoryManagement />;
     }

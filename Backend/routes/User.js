@@ -153,6 +153,14 @@ router.post('/login', async (req, res) => {
             });
         }
 
+        // Check if cashier is approved by admin
+        if (user.role === 'Cashier' && !user.isApproved) {
+            return res.status(403).json({
+                error: 'Your account is pending approval from an administrator. Please check back later.',
+                pendingApproval: true
+            });
+        }
+
         // Check 2FA if enabled
         if (user.isTwoFactorEnabled) {
             if (!twoFactorToken) {

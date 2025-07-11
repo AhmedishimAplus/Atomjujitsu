@@ -43,6 +43,7 @@ const expenseRoutes = require('./routes/Expense');
 const userRoutes = require('./routes/User');
 const staffRoutes = require('./routes/staff');
 const salesRoutes = require('./routes/sales');
+const adminRoutes = require('./routes/admin'); // Add admin routes
 
 app.use('/api/auth', authRoutes);
 app.use('/api/users', userRoutes);
@@ -52,6 +53,7 @@ app.use('/api/purchases', purchaseRoutes);
 app.use('/api/categories', categoryRoutes);
 app.use('/api/staff', staffRoutes);
 app.use('/api/sales', salesRoutes);
+app.use('/api/admin', adminRoutes); // Use admin routes
 
 // Basic health check route
 app.get('/', (req, res) => {

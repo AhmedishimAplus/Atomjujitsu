@@ -9,6 +9,7 @@ import SignupPage from './components/SignupPage';
 import VerifyEmailPage from './components/VerifyEmailPage';
 import TwoFactorVerification from './components/TwoFactorVerification';
 import ForgotPasswordPage from './components/ForgotPasswordPage';
+import EmailVerifiedPendingApproval from './components/EmailVerifiedPendingApproval';
 import { getUserFromToken } from './utils/jwt';
 
 const AppContent: React.FC = () => {
@@ -59,6 +60,7 @@ const AppContent: React.FC = () => {
         <Route path="/verify-email" element={<VerifyEmailPage />} />
         <Route path="/verify-2fa" element={<TwoFactorVerification />} />
         <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+        <Route path="/email-verified-pending-approval" element={<EmailVerifiedPendingApproval />} />
         <Route
           path="/*"
           element={

@@ -42,8 +42,8 @@ const SignupPage: React.FC = () => {
                 role: 'Cashier'
             });
 
-            // Navigate to the verification page with email
-            navigate(`/verify-email?email=${encodeURIComponent(email)}`);
+            // Navigate to the verification page with email and a note about approval
+            navigate(`/verify-email?email=${encodeURIComponent(email)}&requiresApproval=true`);
         } catch (err: any) {
             setError(err.response?.data?.error || 'Registration failed');
         } finally {
