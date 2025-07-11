@@ -111,7 +111,9 @@ userSchema.methods.incrementLoginAttempts = async function () {
 
     // Lock account if too many attempts
     const MAX_LOGIN_ATTEMPTS = 5;
-    if (this.loginAttempts >= MAX_LOGIN_ATTEMPTS) {
+    const wasJustLocked = this.loginAttempts >= MAX_LOGIN_ATTEMPTS && (!this.lockUntil || this.lockUntil <= Date.now());
+
+    if (wasJustLocked) {
         this.lockUntil = new Date(Date.now() + 15 * 60 * 1000); // Lock for 15 minutes
     }
 

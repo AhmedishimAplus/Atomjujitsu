@@ -18,7 +18,8 @@ const AppContent: React.FC = () => {
   useEffect(() => {
     if (token) {
       const userData = getUserFromToken(token);
-      if (userData) {      dispatch({
+      if (userData) {
+        dispatch({
           type: 'SET_USER',
           payload: {
             ...userData,

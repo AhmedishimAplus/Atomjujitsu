@@ -37,7 +37,7 @@ const TwoFactorSetup: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  };  const verifySetup = async () => {
+  }; const verifySetup = async () => {
     try {
       setLoading(true);
       setError('');

@@ -109,7 +109,14 @@ router.post('/login', async (req, res) => {
             // Send warning email after certain number of attempts
             if (user.loginAttempts >= 3) {
                 const isLocked = user.loginAttempts >= 5;
-                await sendLoginWarningEmail(user.email, user.loginAttempts, isLocked);
+                try {
+                    console.log(`Sending warning email to ${user.email}, attempts: ${user.loginAttempts}, locked: ${isLocked}`);
+                    await sendLoginWarningEmail(user.email, user.loginAttempts, isLocked);
+                    console.log("Warning email sent successfully");
+                } catch (emailError) {
+                    console.error("Failed to send warning email:", emailError);
+                    // Continue with login flow even if email fails
+                }
             }
 
             return res.status(401).json({ error: 'Invalid credentials' });
@@ -145,7 +152,14 @@ router.post('/login', async (req, res) => {
 
                 if (user.loginAttempts >= 3) {
                     const isLocked = user.loginAttempts >= 5;
-                    await sendLoginWarningEmail(user.email, user.loginAttempts, isLocked);
+                    try {
+                        console.log(`Sending 2FA warning email to ${user.email}, attempts: ${user.loginAttempts}, locked: ${isLocked}`);
+                        await sendLoginWarningEmail(user.email, user.loginAttempts, isLocked);
+                        console.log("2FA warning email sent successfully");
+                    } catch (emailError) {
+                        console.error("Failed to send 2FA warning email:", emailError);
+                        // Continue with login flow even if email fails
+                    }
                 }
 
                 return res.status(401).json({ error: 'Invalid 2FA token' });
@@ -155,11 +169,11 @@ router.post('/login', async (req, res) => {
         // Reset login attempts on successful login
         await user.resetLoginAttempts();        // Generate JWT token
         const token = jwt.sign(
-            { 
-                id: user._id, 
-                email: user.email, 
+            {
+                id: user._id,
+                email: user.email,
                 role: user.role,
-                isTwoFactorEnabled: user.isTwoFactorEnabled 
+                isTwoFactorEnabled: user.isTwoFactorEnabled
             },
             process.env.JWT_SECRET,
             { expiresIn: '4.5h' }
