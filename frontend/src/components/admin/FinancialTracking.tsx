@@ -336,12 +336,7 @@ const FinancialTracking: React.FC = () => {
         }
       });
 
-      // Debug
-      console.log('Recalculated Monthly Profit:', monthlyProfit);
-      console.log('Recalculated Weekly Profit:', weeklyProfit);
-      console.log('Backend Monthly Profit:', backendMonthTotals?.totalProfit);
-      console.log('Backend Weekly Profit:', backendWeekTotals?.totalProfit);
-
+      
       // Update the UI if the calculated values differ significantly from backend values
       if (backendMonthTotals && Math.abs(backendMonthTotals.totalProfit - monthlyProfit) > 0.01) {
         console.log('Updating monthly profit display from:', backendMonthTotals.totalProfit, 'to:', monthlyProfit);
