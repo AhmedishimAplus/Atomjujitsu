@@ -6,7 +6,19 @@ import Select from '../ui/Select';
 import { formatCurrency, getWeekDates, getMonthDates, groupDataByWeeks } from '../../utils/helpers';
 import { TrendingUp, Download, ShoppingBag, DollarSign, RefreshCw } from 'lucide-react';
 import { Navigate } from 'react-router-dom';
-import { getLowStockProducts } from '../../services/api';
+import { 
+  getLowStockProducts, 
+  getSalesMonthTotals, 
+  getSalesWeekTotals,
+  getSalesMonthProfit,
+  getSalesWeekProfit,
+  getExpensesMonthTotal,
+  getExpensesWeekTotal,
+  getDailySalesMonth,
+  getDailySalesWeek,
+  getDailyExpensesMonth,
+  getDailyExpensesWeek
+} from '../../services/api';
 
 interface Product {
   _id: string;
@@ -44,57 +56,45 @@ const AnalyticsDashboard: React.FC = () => {
 
   // Fetch backend data
   useEffect(() => {
-    // Get authentication token
-    const token = localStorage.getItem('token');
-
     // Function to fetch data
     const fetchData = async () => {
       setIsLoading(true);
       setError(null);
       try {
         // Fetch sales data based on report type
-        const endpoint = reportType === 'weekly' ? '/api/sales/totals/week' : '/api/sales/totals/month';
-        const salesRes = await fetch(endpoint, {
-          headers: { 'Authorization': token ? `Bearer ${token}` : '' }
-        });
-
-        if (!salesRes.ok) {
-          throw new Error('Failed to fetch sales data');
-        }
-
-        const salesData = await salesRes.json();
+        const salesData = reportType === 'weekly' 
+          ? await getSalesWeekTotals() 
+          : await getSalesMonthTotals();
+        
         setTotalSalesAmount(salesData.totalSales || 0);
-        setTotalTransactionsCount(salesData.totalCount || 0);        // Fetch profit data for reference, but we'll always calculate it ourselves
+        setTotalTransactionsCount(salesData.totalCount || 0);
+
+        // Fetch profit data for reference, but we'll always calculate it ourselves
         try {
-          const profitEndpoint = `/api/sales/profit/${reportType === 'weekly' ? 'week' : 'month'}`;
-          const profitRes = await fetch(profitEndpoint, {
-            headers: { 'Authorization': token ? `Bearer ${token}` : '' }
-          });
-
-          if (profitRes.ok) {
-            // We get the profit for reference, but we'll always calculate it ourselves
-            const profitData = await profitRes.json();
-
-          }
+          reportType === 'weekly' 
+            ? await getSalesWeekProfit() 
+            : await getSalesMonthProfit();
+          
+          // We get the profit for reference, but we'll always calculate it ourselves
         } catch (profitError) {
           console.error('Error fetching profit data:', profitError);
         }
         // We'll set the profit in the dedicated useEffect that calculates totalSalesAmount - totalExpensesAmount
 
         // Fetch expenses total
-        const expenseEndpoint = reportType === 'weekly' ? '/api/expenses/current-week-total' : '/api/expenses/current-month-total';
-        const expensesRes = await fetch(expenseEndpoint, {
-          headers: { 'Authorization': token ? `Bearer ${token}` : '' }
-        });
-
-        if (!expensesRes.ok) {
-          throw new Error('Failed to fetch expense data');
-        }
-
-        const expenseData = await expensesRes.json();
+        const expenseData = reportType === 'weekly' 
+          ? await getExpensesWeekTotal() 
+          : await getExpensesMonthTotal();
+        
         setTotalExpensesAmount(expenseData.total || 0);
 
         // Fetch low stock products
+        try {
+          const productsData = await getLowStockProducts();
+          setLowStockProducts(productsData);
+        } catch (error) {
+          console.error('Failed to fetch low stock products:', error);
+        }
 
       } catch (error) {
         console.error('Error fetching data:', error);
@@ -136,13 +136,10 @@ const AnalyticsDashboard: React.FC = () => {
         }
 
         // Fetch daily sales data
-        const dailySalesEndpoint = reportType === 'weekly' ? '/api/sales/daily/week' : '/api/sales/daily/month';
-        const dailySalesRes = await fetch(dailySalesEndpoint, {
-          headers: { 'Authorization': token ? `Bearer ${token}` : '' }
-        });
-
-        if (dailySalesRes.ok) {
-          const dailySalesData = await dailySalesRes.json();
+        try {
+          const dailySalesData = reportType === 'weekly' 
+            ? await getDailySalesWeek() 
+            : await getDailySalesMonth();
 
           // Update sales chart data
           if (Array.isArray(dailySalesData)) {
@@ -152,16 +149,15 @@ const AnalyticsDashboard: React.FC = () => {
               salesByDay[date] = item.nonSharoofaTotal || 0;
             });
           }
+        } catch (error) {
+          console.error('Error fetching daily sales data:', error);
         }
 
         // Fetch daily expenses data
-        const dailyExpensesEndpoint = reportType === 'weekly' ? '/api/expenses/daily/week' : '/api/expenses/daily/month';
-        const dailyExpensesRes = await fetch(dailyExpensesEndpoint, {
-          headers: { 'Authorization': token ? `Bearer ${token}` : '' }
-        });
-
-        if (dailyExpensesRes.ok) {
-          const dailyExpensesData = await dailyExpensesRes.json();
+        try {
+          const dailyExpensesData = reportType === 'weekly' 
+            ? await getDailyExpensesWeek() 
+            : await getDailyExpensesMonth();
 
           // Update expenses chart data
           if (Array.isArray(dailyExpensesData)) {
@@ -170,6 +166,8 @@ const AnalyticsDashboard: React.FC = () => {
               expensesByDay[date] = item.total || 0;
             });
           }
+        } catch (error) {
+          console.error('Error fetching daily expenses data:', error);
         }        // Format data for charts
         const rawSalesData = Object.entries(salesByDay).map(([date, value]) => ({
           label: date.substring(5), // MM-DD format
@@ -254,39 +252,26 @@ const AnalyticsDashboard: React.FC = () => {
     // Show loading state
     setIsLoading(true);
 
-    // Directly trigger both data fetching functions
-    const token = localStorage.getItem('token');
-
     // Create fresh fetch functions
     const fetchMainData = async () => {
       try {
-        const endpoint = reportType === 'weekly' ? '/api/sales/totals/week' : '/api/sales/totals/month';
-        const salesRes = await fetch(endpoint, {
-          headers: { 'Authorization': token ? `Bearer ${token}` : '' },
-          cache: 'no-store' // Prevent caching
-        });
+        const salesData = reportType === 'weekly' 
+          ? await getSalesWeekTotals() 
+          : await getSalesMonthTotals();
 
-        if (salesRes.ok) {
-          const salesData = await salesRes.json();
-          setTotalSalesAmount(salesData.totalSales || 0);
-          setTotalTransactionsCount(salesData.totalCount || 0);
+        setTotalSalesAmount(salesData.totalSales || 0);
+        setTotalTransactionsCount(salesData.totalCount || 0);
 
-          if (salesData.totalProfit !== undefined) {
-            setTotalProfit(salesData.totalProfit);
-          }
+        if (salesData.totalProfit !== undefined) {
+          setTotalProfit(salesData.totalProfit);
         }
 
         // Fetch expenses
-        const expenseEndpoint = reportType === 'weekly' ? '/api/expenses/current-week-total' : '/api/expenses/current-month-total';
-        const expensesRes = await fetch(expenseEndpoint, {
-          headers: { 'Authorization': token ? `Bearer ${token}` : '' },
-          cache: 'no-store' // Prevent caching
-        });
+        const expenseData = reportType === 'weekly' 
+          ? await getExpensesWeekTotal() 
+          : await getExpensesMonthTotal();
 
-        if (expensesRes.ok) {
-          const expenseData = await expensesRes.json();
-          setTotalExpensesAmount(expenseData.total || 0);
-        }
+        setTotalExpensesAmount(expenseData.total || 0);
 
         // Fetch low stock products
         try {

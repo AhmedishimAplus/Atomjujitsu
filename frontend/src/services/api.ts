@@ -165,6 +165,49 @@ export const getSalesWeekTotals = async () => {
   return response.data;
 };
 
+// Sales profit endpoints
+export const getSalesMonthProfit = async () => {
+  const response = await api.get('/sales/profit/month');
+  return response.data;
+};
+
+export const getSalesWeekProfit = async () => {
+  const response = await api.get('/sales/profit/week');
+  return response.data;
+};
+
+// Expenses totals
+export const getExpensesMonthTotal = async () => {
+  const response = await api.get('/expenses/current-month-total');
+  return response.data;
+};
+
+export const getExpensesWeekTotal = async () => {
+  const response = await api.get('/expenses/current-week-total');
+  return response.data;
+};
+
+// Daily data for charts
+export const getDailySalesMonth = async () => {
+  const response = await api.get('/sales/daily/month');
+  return response.data;
+};
+
+export const getDailySalesWeek = async () => {
+  const response = await api.get('/sales/daily/week');
+  return response.data;
+};
+
+export const getDailyExpensesMonth = async () => {
+  const response = await api.get('/expenses/daily/month');
+  return response.data;
+};
+
+export const getDailyExpensesWeek = async () => {
+  const response = await api.get('/expenses/daily/week');
+  return response.data;
+};
+
 // Staff
 export const getStaff = async () => {
   const response = await api.get('/staff');
