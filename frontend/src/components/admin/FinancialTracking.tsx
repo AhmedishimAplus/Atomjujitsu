@@ -8,7 +8,7 @@ import Modal from '../ui/Modal';
 import { Expense } from '../../types';
 import { formatCurrency, formatDate, generateId } from '../../utils/helpers';
 import { Plus, Calendar, DollarSign } from 'lucide-react';
-import { createExpense, getExpenses, getCategories, getSales, getProducts, getCurrentWeekTotal } from '../../services/api';
+import { createExpense, getExpenses, getCategories, getSales, getProducts, getCurrentWeekTotal, getSalesMonthTotals, getSalesWeekTotals } from '../../services/api';
 import { ProductItem } from '../../types';
 import { Navigate } from 'react-router-dom';
 
@@ -74,12 +74,8 @@ const FinancialTracking: React.FC = () => {
       setBackendTotalsLoading(true);
       setBackendTotalsError(null);
       try {
-        const token = localStorage.getItem('token') || '';
-        const monthRes = await fetch('/api/sales/totals/month', { headers: { 'Authorization': token ? `Bearer ${token}` : '' } });
-        const weekRes = await fetch('/api/sales/totals/week', { headers: { 'Authorization': token ? `Bearer ${token}` : '' } });
-        if (!monthRes.ok || !weekRes.ok) throw new Error('Failed to fetch totals');
-        const monthData = await monthRes.json();
-        const weekData = await weekRes.json();
+        const monthData = await getSalesMonthTotals();
+        const weekData = await getSalesWeekTotals();
         setBackendMonthTotals(monthData);
         setBackendWeekTotals(weekData);
       } catch (e) {

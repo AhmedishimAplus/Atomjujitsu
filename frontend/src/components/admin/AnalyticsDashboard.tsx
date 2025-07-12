@@ -6,6 +6,7 @@ import Select from '../ui/Select';
 import { formatCurrency, getWeekDates, getMonthDates, groupDataByWeeks } from '../../utils/helpers';
 import { TrendingUp, Download, ShoppingBag, DollarSign, RefreshCw } from 'lucide-react';
 import { Navigate } from 'react-router-dom';
+import { getLowStockProducts } from '../../services/api';
 
 interface Product {
   _id: string;
@@ -288,14 +289,11 @@ const AnalyticsDashboard: React.FC = () => {
         }
 
         // Fetch low stock products
-        const productsRes = await fetch('/api/products/low-stock', {
-          headers: { 'Authorization': token ? `Bearer ${token}` : '' },
-          cache: 'no-store' // Prevent caching
-        });
-
-        if (productsRes.ok) {
-          const productsData = await productsRes.json();
+        try {
+          const productsData = await getLowStockProducts();
           setLowStockProducts(productsData);
+        } catch (error) {
+          console.error('Failed to fetch low stock products:', error);
         }
       } catch (error) {
         console.error('Error refreshing data:', error);

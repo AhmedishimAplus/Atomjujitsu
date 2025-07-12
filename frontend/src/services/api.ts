@@ -48,6 +48,11 @@ export const getProducts = async () => {
   return response.data;
 };
 
+export const getLowStockProducts = async () => {
+  const response = await api.get('/products/low-stock');
+  return response.data;
+};
+
 export const createProduct = async (productData: any) => {
   const response = await api.post('/products', productData);
   return response.data;
@@ -144,15 +149,21 @@ export const getSalesHistoryWithCost = async (params?: {
   return response.data;
 };
 
-export async function getCurrentWeekTotal(token: string) {
-  const res = await fetch('/api/sales/current-week-total', {
-    headers: {
-      'Authorization': token ? `Bearer ${token}` : ''
-    }
-  });
-  if (!res.ok) throw new Error('Failed to fetch current week total');
-  return res.json();
+export async function getCurrentWeekTotal() {
+  const response = await api.get('/sales/current-week-total');
+  return response.data;
 }
+
+// Sales totals for analytics
+export const getSalesMonthTotals = async () => {
+  const response = await api.get('/sales/totals/month');
+  return response.data;
+};
+
+export const getSalesWeekTotals = async () => {
+  const response = await api.get('/sales/totals/week');
+  return response.data;
+};
 
 // Staff
 export const getStaff = async () => {
