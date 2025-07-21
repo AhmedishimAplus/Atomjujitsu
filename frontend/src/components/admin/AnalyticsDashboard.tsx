@@ -6,9 +6,8 @@ import Select from '../ui/Select';
 import { formatCurrency, getWeekDates, getMonthDates, groupDataByWeeks } from '../../utils/helpers';
 import { TrendingUp, Download, ShoppingBag, DollarSign, RefreshCw } from 'lucide-react';
 import { Navigate } from 'react-router-dom';
-import { 
-  getLowStockProducts, 
-  getSalesMonthTotals, 
+import {
+  getSalesMonthTotals,
   getSalesWeekTotals,
   getSalesMonthProfit,
   getSalesWeekProfit,
@@ -19,13 +18,6 @@ import {
   getDailyExpensesMonth,
   getDailyExpensesWeek
 } from '../../services/api';
-
-interface Product {
-  _id: string;
-  name: string;
-  stock: number;
-  minStock: number;
-}
 
 const AnalyticsDashboard: React.FC = () => {
   const { state, dispatch } = useAppContext();
@@ -45,7 +37,7 @@ const AnalyticsDashboard: React.FC = () => {
   const [totalExpensesAmount, setTotalExpensesAmount] = useState<number>(0);
   const [totalProfit, setTotalProfit] = useState<number>(0);
   const [totalTransactionsCount, setTotalTransactionsCount] = useState<number>(0);
-  const [lowStockProducts, setLowStockProducts] = useState<Product[]>([]); const [isLoading, setIsLoading] = useState<boolean>(true);
+  const [isLoading, setIsLoading] = useState<boolean>(true);
   const [isChangingReportType, setIsChangingReportType] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
   const [lastUpdated, setLastUpdated] = useState<Date>(new Date());
@@ -62,19 +54,19 @@ const AnalyticsDashboard: React.FC = () => {
       setError(null);
       try {
         // Fetch sales data based on report type
-        const salesData = reportType === 'weekly' 
-          ? await getSalesWeekTotals() 
+        const salesData = reportType === 'weekly'
+          ? await getSalesWeekTotals()
           : await getSalesMonthTotals();
-        
+
         setTotalSalesAmount(salesData.totalSales || 0);
         setTotalTransactionsCount(salesData.totalCount || 0);
 
         // Fetch profit data for reference, but we'll always calculate it ourselves
         try {
-          reportType === 'weekly' 
-            ? await getSalesWeekProfit() 
+          reportType === 'weekly'
+            ? await getSalesWeekProfit()
             : await getSalesMonthProfit();
-          
+
           // We get the profit for reference, but we'll always calculate it ourselves
         } catch (profitError) {
           console.error('Error fetching profit data:', profitError);
@@ -82,19 +74,11 @@ const AnalyticsDashboard: React.FC = () => {
         // We'll set the profit in the dedicated useEffect that calculates totalSalesAmount - totalExpensesAmount
 
         // Fetch expenses total
-        const expenseData = reportType === 'weekly' 
-          ? await getExpensesWeekTotal() 
+        const expenseData = reportType === 'weekly'
+          ? await getExpensesWeekTotal()
           : await getExpensesMonthTotal();
-        
-        setTotalExpensesAmount(expenseData.total || 0);
 
-        // Fetch low stock products
-        try {
-          const productsData = await getLowStockProducts();
-          setLowStockProducts(productsData);
-        } catch (error) {
-          console.error('Failed to fetch low stock products:', error);
-        }
+        setTotalExpensesAmount(expenseData.total || 0);
 
       } catch (error) {
         console.error('Error fetching data:', error);
@@ -137,8 +121,8 @@ const AnalyticsDashboard: React.FC = () => {
 
         // Fetch daily sales data
         try {
-          const dailySalesData = reportType === 'weekly' 
-            ? await getDailySalesWeek() 
+          const dailySalesData = reportType === 'weekly'
+            ? await getDailySalesWeek()
             : await getDailySalesMonth();
 
           // Update sales chart data
@@ -155,8 +139,8 @@ const AnalyticsDashboard: React.FC = () => {
 
         // Fetch daily expenses data
         try {
-          const dailyExpensesData = reportType === 'weekly' 
-            ? await getDailyExpensesWeek() 
+          const dailyExpensesData = reportType === 'weekly'
+            ? await getDailyExpensesWeek()
             : await getDailyExpensesMonth();
 
           // Update expenses chart data
@@ -255,8 +239,8 @@ const AnalyticsDashboard: React.FC = () => {
     // Create fresh fetch functions
     const fetchMainData = async () => {
       try {
-        const salesData = reportType === 'weekly' 
-          ? await getSalesWeekTotals() 
+        const salesData = reportType === 'weekly'
+          ? await getSalesWeekTotals()
           : await getSalesMonthTotals();
 
         setTotalSalesAmount(salesData.totalSales || 0);
@@ -267,19 +251,12 @@ const AnalyticsDashboard: React.FC = () => {
         }
 
         // Fetch expenses
-        const expenseData = reportType === 'weekly' 
-          ? await getExpensesWeekTotal() 
+        const expenseData = reportType === 'weekly'
+          ? await getExpensesWeekTotal()
           : await getExpensesMonthTotal();
 
         setTotalExpensesAmount(expenseData.total || 0);
 
-        // Fetch low stock products
-        try {
-          const productsData = await getLowStockProducts();
-          setLowStockProducts(productsData);
-        } catch (error) {
-          console.error('Failed to fetch low stock products:', error);
-        }
       } catch (error) {
         console.error('Error refreshing data:', error);
       } finally {
