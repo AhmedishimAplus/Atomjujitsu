@@ -93,12 +93,6 @@ const AnalyticsDashboard: React.FC = () => {
   }, [reportType]);
   // Generate analytics based on report type
   useEffect(() => {
-    const token = localStorage.getItem('token');
-
-    // We don't want to show the loading indicator again for this second data fetch
-    // since we already have the main metrics displayed
-    // setIsLoading(true) is only in the first useEffect
-
     // Function to fetch chart data
     const fetchChartData = async () => {
       try {
@@ -174,42 +168,65 @@ const AnalyticsDashboard: React.FC = () => {
         }
 
         // Fetch top products
-        const topProductsEndpoint = reportType === 'weekly' ?
-          '/api/sales/top-products/week' : '/api/sales/top-products/month';
+        try {
+          const topProductsEndpoint = reportType === 'weekly' ?
+            '/sales/top-products/week' : '/sales/top-products/month';
 
-        const topProductsRes = await fetch(topProductsEndpoint, {
-          headers: { 'Authorization': token ? `Bearer ${token}` : '' }
-        });
+          const topProductsRes = await fetch(`http://localhost:3000/api${topProductsEndpoint}`, {
+            headers: {
+              'Authorization': localStorage.getItem('token') ? `Bearer ${localStorage.getItem('token')}` : '',
+              'Content-Type': 'application/json'
+            }
+          });
 
-        if (topProductsRes.ok) {
-          const topProductsData = await topProductsRes.json();          // Filter out Sharoofa products
-          if (Array.isArray(topProductsData)) {
-            const filteredProducts = topProductsData.filter((product: any) =>
-              product.owner !== 'Sharoofa'
-            );
+          console.log('Top products API call:', `http://localhost:3000/api${topProductsEndpoint}`);
+          console.log('Top products response status:', topProductsRes.status);
 
-            // Set top products by revenue
-            setTopProducts(
-              filteredProducts.map((product: any) => ({
-                name: product.name,
-                quantity: product.quantity,
-                revenue: product.revenue
-              })).slice(0, 5)
-            );
+          if (topProductsRes.ok) {
+            const topProductsData = await topProductsRes.json();
+            console.log('Top products data received:', topProductsData);
 
-            // Set top products by quantity
-            setTopProductsByQuantity(
-              [...filteredProducts]
-                .sort((a, b) => b.quantity - a.quantity)
-                .map((product: any) => ({
+            // Filter out Sharoofa products
+            if (Array.isArray(topProductsData)) {
+              const filteredProducts = topProductsData.filter((product: any) =>
+                product.owner !== 'Sharoofa'
+              );
+
+              console.log('Filtered products:', filteredProducts);
+
+              // Set top products by revenue
+              setTopProducts(
+                filteredProducts.map((product: any) => ({
                   name: product.name,
                   quantity: product.quantity,
                   revenue: product.revenue
                 })).slice(0, 5)
-            );
+              );
+
+              // Set top products by quantity
+              setTopProductsByQuantity(
+                [...filteredProducts]
+                  .sort((a: any, b: any) => b.quantity - a.quantity)
+                  .map((product: any) => ({
+                    name: product.name,
+                    quantity: product.quantity,
+                    revenue: product.revenue
+                  })).slice(0, 5)
+              );
+            } else {
+              console.log('Top products data is not an array:', topProductsData);
+              setTopProducts([]);
+              setTopProductsByQuantity([]);
+            }
           } else {
+            console.error('Failed to fetch top products:', topProductsRes.status, await topProductsRes.text());
             setTopProducts([]);
+            setTopProductsByQuantity([]);
           }
+        } catch (topProductsError) {
+          console.error('Error fetching top products:', topProductsError);
+          setTopProducts([]);
+          setTopProductsByQuantity([]);
         }
       } catch (error) {
         console.error('Error fetching chart data:', error);
