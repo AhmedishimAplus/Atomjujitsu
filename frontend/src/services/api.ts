@@ -301,4 +301,15 @@ export const deleteCashier = async (id: string) => {
   return response.data;
 };
 
+// Top products endpoints
+export const getTopProductsWeek = async () => {
+  const response = await api.get('/sales/top-products/week');
+  return response.data;
+};
+
+export const getTopProductsMonth = async () => {
+  const response = await api.get('/sales/top-products/month');
+  return response.data;
+};
+
 export default api;

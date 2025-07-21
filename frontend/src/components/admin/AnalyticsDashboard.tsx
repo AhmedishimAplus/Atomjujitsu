@@ -16,7 +16,9 @@ import {
   getDailySalesMonth,
   getDailySalesWeek,
   getDailyExpensesMonth,
-  getDailyExpensesWeek
+  getDailyExpensesWeek,
+  getTopProductsWeek,
+  getTopProductsMonth
 } from '../../services/api';
 
 const AnalyticsDashboard: React.FC = () => {
@@ -169,57 +171,40 @@ const AnalyticsDashboard: React.FC = () => {
 
         // Fetch top products
         try {
-          const topProductsEndpoint = reportType === 'weekly' ?
-            '/sales/top-products/week' : '/sales/top-products/month';
+          const topProductsData = reportType === 'weekly'
+            ? await getTopProductsWeek()
+            : await getTopProductsMonth();
 
-          const topProductsRes = await fetch(`http://localhost:3000/api${topProductsEndpoint}`, {
-            headers: {
-              'Authorization': localStorage.getItem('token') ? `Bearer ${localStorage.getItem('token')}` : '',
-              'Content-Type': 'application/json'
-            }
-          });
+          
 
-          console.log('Top products API call:', `http://localhost:3000/api${topProductsEndpoint}`);
-          console.log('Top products response status:', topProductsRes.status);
+          // Filter out Sharoofa products
+          if (Array.isArray(topProductsData)) {
+            const filteredProducts = topProductsData.filter((product: any) =>
+              product.owner !== 'Sharoofa'
+            );
 
-          if (topProductsRes.ok) {
-            const topProductsData = await topProductsRes.json();
-            console.log('Top products data received:', topProductsData);
 
-            // Filter out Sharoofa products
-            if (Array.isArray(topProductsData)) {
-              const filteredProducts = topProductsData.filter((product: any) =>
-                product.owner !== 'Sharoofa'
-              );
+            // Set top products by revenue
+            setTopProducts(
+              filteredProducts.map((product: any) => ({
+                name: product.name,
+                quantity: product.quantity,
+                revenue: product.revenue
+              })).slice(0, 5)
+            );
 
-              console.log('Filtered products:', filteredProducts);
-
-              // Set top products by revenue
-              setTopProducts(
-                filteredProducts.map((product: any) => ({
+            // Set top products by quantity
+            setTopProductsByQuantity(
+              [...filteredProducts]
+                .sort((a: any, b: any) => b.quantity - a.quantity)
+                .map((product: any) => ({
                   name: product.name,
                   quantity: product.quantity,
                   revenue: product.revenue
                 })).slice(0, 5)
-              );
-
-              // Set top products by quantity
-              setTopProductsByQuantity(
-                [...filteredProducts]
-                  .sort((a: any, b: any) => b.quantity - a.quantity)
-                  .map((product: any) => ({
-                    name: product.name,
-                    quantity: product.quantity,
-                    revenue: product.revenue
-                  })).slice(0, 5)
-              );
-            } else {
-              console.log('Top products data is not an array:', topProductsData);
-              setTopProducts([]);
-              setTopProductsByQuantity([]);
-            }
+            );
           } else {
-            console.error('Failed to fetch top products:', topProductsRes.status, await topProductsRes.text());
+          
             setTopProducts([]);
             setTopProductsByQuantity([]);
           }
