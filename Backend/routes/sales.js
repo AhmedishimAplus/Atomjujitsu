@@ -3,6 +3,7 @@ const { body, validationResult } = require('express-validator');
 const Sale = require('../models/Sale');
 const Product = require('../models/Product');
 const Staff = require('../models/Staff');
+const Bundle = require('../models/Bundle');
 const Expense = require('../models/Expense');
 const auth = require('../middleware/auth');
 
@@ -178,7 +179,7 @@ router.post('/', [
     body('items.*.priceUsed').isFloat({ min: 0 }).withMessage('Price used must be a positive number'),
     body('subtotal').isFloat({ min: 0 }).withMessage('Subtotal must be a positive number'),
     body('staffDiscount').isBoolean().withMessage('Staff discount must be a boolean'),
-    body('paymentMethod').isIn(['Cash', 'InstaPay']).withMessage('Invalid payment method'),
+    body('paymentMethod').isIn(['Cash', 'InstaPay', 'Bundles']).withMessage('Invalid payment method'),
     body('total').isFloat({ min: 0 }).withMessage('Total must be a positive number')
 ], async (req, res) => {
     try {
@@ -194,8 +195,48 @@ router.post('/', [
             staffId,
             staffName,
             paymentMethod,
-            total
+            total,
+            bundleId,
+            phoneNumber
         } = req.body;
+
+        // Validate bundle payment if applicable
+        if (paymentMethod === 'Bundles') {
+            if (!bundleId || !phoneNumber) {
+                return res.status(400).json({ error: 'Bundle ID and phone number are required for bundle payments' });
+            }
+
+            // Verify the bundle exists (but skip balance check if total is 0)
+            const bundle = await Bundle.findById(bundleId);
+            if (!bundle) {
+                return res.status(400).json({ error: 'Bundle not found' });
+            }
+
+            if (bundle.phoneNumber !== phoneNumber) {
+                return res.status(400).json({ error: 'Phone number does not match bundle' });
+            }
+
+            // Check if this is a staff bundle and validate accordingly
+            if (staffDiscount) {
+                if (!bundle.isStaff) {
+                    return res.status(400).json({ error: 'Cannot use staff discount with non-staff bundle' });
+                }
+
+                if (staffId && bundle.staffId?.toString() !== staffId) {
+                    return res.status(400).json({ error: 'Bundle does not belong to the selected staff member' });
+                }
+            }
+
+            // Only check balance if total is greater than 0
+            if (total > 0) {
+                // Check balance (allow up to 100 over limit)
+                if (bundle.amount < total && (total - bundle.amount) > 100) {
+                    return res.status(400).json({
+                        error: `Insufficient bundle balance. Need ${(total - bundle.amount).toFixed(2)} more. Maximum overdraft is 100.00`
+                    });
+                }
+            }
+        }
 
         // Create the sale object
         const sale = new Sale({
@@ -206,6 +247,12 @@ router.post('/', [
             total, // Will be recalculated if there are water bottle allowances
             createdBy: req.user.id
         });
+
+        // Add bundle information if payment method is bundles
+        if (paymentMethod === 'Bundles') {
+            sale.bundleId = bundleId;
+            sale.bundlePhoneNumber = phoneNumber;
+        }
 
         // Initialize Sharoofa amount
         let sharoofaAmount = 0;
@@ -858,6 +905,15 @@ router.get('/sharoofa-settlement', auth, async (req, res) => {
                             ]
                         }
                     },
+                    bundlesAmount: {
+                        $sum: {
+                            $cond: [
+                                { $eq: ["$paymentMethod", "Bundles"] },
+                                "$sharoofaAmount",
+                                0
+                            ]
+                        }
+                    },
                     count: { $sum: 1 }
                 }
             }
@@ -867,6 +923,7 @@ router.get('/sharoofa-settlement', auth, async (req, res) => {
             totalAmount: result[0].totalAmount,
             cashAmount: result[0].cashAmount,
             instaPayAmount: result[0].instaPayAmount,
+            bundlesAmount: result[0].bundlesAmount,
             salesCount: result[0].count
         } : {
             totalAmount: 0,

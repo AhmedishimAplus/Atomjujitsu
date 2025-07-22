@@ -6,6 +6,7 @@ import AnalyticsDashboard from './AnalyticsDashboard';
 import StaffManagement from './StaffManagement';
 import TwoFactorSetup from './TwoFactorSetup';
 import UserManagement from './UserManagement';
+import BundleManagement from './BundleManagement';
 import { Navigate } from 'react-router-dom';
 
 const AdminInterface: React.FC = () => {

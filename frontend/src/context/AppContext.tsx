@@ -12,17 +12,19 @@ type AppState = {
   expenses: Expense[];
   activeView: 'cashier' | 'admin';
   adminTab: 'inventory' | 'financial' | 'analytics' | 'staff' | 'water-bottles' | '2fa' | 'users';
+  cashierTab: 'pos' | 'bundles';
   user: User | null;
 };
 
 type AppAction =
   | { type: 'SET_VIEW'; payload: 'cashier' | 'admin' }
   | { type: 'SET_ADMIN_TAB'; payload: 'inventory' | 'financial' | 'analytics' | 'staff' | 'water-bottles' | '2fa' | 'users' }
+  | { type: 'SET_CASHIER_TAB'; payload: 'pos' | 'bundles' }
   | { type: 'ADD_TO_ORDER'; payload: { product: ProductItem; quantity: number; isStaffPrice: boolean } }
   | { type: 'REMOVE_FROM_ORDER'; payload: string }
   | { type: 'UPDATE_ORDER_ITEM_QUANTITY'; payload: { productId: string; quantity: number } }
   | { type: 'SET_STAFF_DISCOUNT'; payload: { enabled: boolean; staffName?: string; staffId?: string } }
-  | { type: 'COMPLETE_ORDER'; payload: { paymentMethod: 'InstaPay' | 'Cash'; freeBottleInfo?: { productId: string; freeQuantity: number; paidQuantity: number }[] } }
+  | { type: 'COMPLETE_ORDER'; payload: { paymentMethod: 'InstaPay' | 'Cash' | 'Bundles'; freeBottleInfo?: { productId: string; freeQuantity: number; paidQuantity: number }[]; bundleInfo?: { phoneNumber: string; bundleId: string } } }
   | { type: 'RESET_ORDER' }
   | { type: 'ADD_PRODUCT'; payload: ProductItem }
   | { type: 'UPDATE_PRODUCT'; payload: ProductItem }
@@ -56,6 +58,7 @@ const initialState: AppState = {
   expenses: generateSampleExpenses(),
   activeView: 'cashier',
   adminTab: 'inventory',
+  cashierTab: 'pos',
   user: null
 };
 
@@ -72,6 +75,13 @@ function appReducer(state: AppState, action: AppAction): AppState {
         ...state,
         adminTab: action.payload
       };
+
+    case 'SET_CASHIER_TAB':
+      return {
+        ...state,
+        cashierTab: action.payload
+      };
+
     case 'ADD_TO_ORDER': {
       const { product, quantity, isStaffPrice } = action.payload;
       const price = isStaffPrice ? product.staffPrice : product.sellPrice;

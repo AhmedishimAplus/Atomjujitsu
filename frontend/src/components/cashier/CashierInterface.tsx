@@ -8,16 +8,21 @@ import Modal from '../ui/Modal';
 import Select from '../ui/Select';
 import { ProductItem } from '../../types';
 import { formatCurrency } from '../../utils/helpers';
-import { Trash2, Check, X, DollarSign, CreditCard, ChevronUp, ChevronDown } from 'lucide-react';
-import { getProducts, getCategories, createSale } from '../../services/api';
+import { Trash2, Check, X, DollarSign, CreditCard, ChevronUp, ChevronDown, ShoppingCart, Wallet } from 'lucide-react';
+import { getProducts, getCategories, createSale, getBundleByPhone, getBundleByStaffId, deductFromBundle } from '../../services/api';
 import * as staffApi from '../../services/staffApi';
 import qrCodeImg from '../../assets/instapay.jpeg';
+import BundleManagement from '../admin/BundleManagement';
 
 const CashierInterface: React.FC = () => {
   const { state, dispatch } = useAppContext();
   const [searchTerm, setSearchTerm] = useState('');
   const [paymentModalOpen, setPaymentModalOpen] = useState(false);
-  const [receiptModalOpen, setReceiptModalOpen] = useState(false); const [paymentMethod, setPaymentMethod] = useState<'InstaPay' | 'Cash'>('Cash'); const [staffName, setStaffName] = useState('');
+  const [receiptModalOpen, setReceiptModalOpen] = useState(false); const [paymentMethod, setPaymentMethod] = useState<'InstaPay' | 'Cash' | 'Bundles'>('Cash');
+  const [phoneNumber, setPhoneNumber] = useState('');
+  const [bundleBalance, setBundleBalance] = useState<number | null>(null);
+  const [bundleId, setBundleId] = useState<string | null>(null);
+  const [bundleError, setBundleError] = useState(''); const [staffName, setStaffName] = useState('');
   const [selectedStaff, setSelectedStaff] = useState<any>(null);
   const [products, setProducts] = useState<ProductItem[]>([]);
   const [categories, setCategories] = useState<any[]>([]);
@@ -246,6 +251,24 @@ const CashierInterface: React.FC = () => {
   };
   // Handle payment
   const handlePayment = async () => {
+    // For bundles payment, check if we have valid bundle data
+    if (paymentMethod === 'Bundles') {
+      if (!bundleId || !phoneNumber) {
+        alert('Please enter a phone number and lookup the bundle first');
+        return;
+      }
+
+      const total = calculatePreviewTotal();
+      if (bundleBalance !== null && bundleBalance < total) {
+        const deficit = total - bundleBalance;
+        if (deficit > 100) {
+          alert(`Insufficient balance. Need ${formatCurrency(deficit)} more. Maximum overdraft is ${formatCurrency(100)}`);
+          return;
+        }
+        // If deficit is <= 100, proceed (user was already warned)
+      }
+    }
+
     // Prepare payload for backend
     const order = state.currentOrder;
 
@@ -305,11 +328,31 @@ const CashierInterface: React.FC = () => {
       paymentMethod,
       total: calculatePreviewTotal(),
     };
+
     if (order.staffDiscount && selectedStaff) {
       payload.staffName = staffName;
       payload.staffId = selectedStaff.id;
-    } try {
-      await createSale(payload);
+    }
+
+    // Add bundle information for bundle payments
+    if (paymentMethod === 'Bundles' && bundleId) {
+      payload.bundleId = bundleId;
+      payload.phoneNumber = phoneNumber;
+    }
+
+    try {
+      console.log('Creating sale with payload:', payload);
+      const saleResult = await createSale(payload);
+      console.log('Sale created successfully:', saleResult);
+
+      // Only proceed with bundle deduction if sale was successful AND total > 0
+      if (paymentMethod === 'Bundles' && bundleId && calculatePreviewTotal() > 0) {
+        console.log('Deducting from bundle:', bundleId, calculatePreviewTotal());
+        await deductFromBundle(bundleId, calculatePreviewTotal());
+        console.log('Bundle deduction successful');
+      } else if (paymentMethod === 'Bundles' && calculatePreviewTotal() === 0) {
+        console.log('Total is $0, skipping bundle deduction');
+      }
 
       // Refresh products after sale to update stock
       const productsData = await getProducts();
@@ -318,18 +361,36 @@ const CashierInterface: React.FC = () => {
       // Refresh staff data to get updated water bottle allowances
       await refreshStaffData();
 
+      const completePayload: any = {
+        paymentMethod,
+        freeBottleInfo
+      };
+
+      if (paymentMethod === 'Bundles') {
+        completePayload.bundleInfo = {
+          phoneNumber,
+          bundleId: bundleId!
+        };
+      }
+
       dispatch({
         type: 'COMPLETE_ORDER',
-        payload: {
-          paymentMethod,
-          freeBottleInfo
-        }
+        payload: completePayload
       });
 
       setPaymentModalOpen(false);
       setReceiptModalOpen(true);
     } catch (e: any) {
-      alert(e?.response?.data?.error || 'Payment failed');
+      console.error('Payment error:', e);
+
+      // Show specific error message
+      const errorMessage = e?.response?.data?.error || e?.message || 'Payment failed';
+      alert(errorMessage);
+
+      // Reset bundle-related state if bundle payment failed
+      if (paymentMethod === 'Bundles') {
+        setBundleError('Payment failed. Please try again.');
+      }
     }
   };  // Function to refresh staff data
   const refreshStaffData = async () => {
@@ -359,6 +420,120 @@ const CashierInterface: React.FC = () => {
     }
   };
 
+  // Handle bundle phone number lookup
+  const handlePhoneLookup = async (phone: string) => {
+    if (!phone) {
+      setBundleBalance(null);
+      setBundleId(null);
+      setBundleError('');
+      return;
+    }
+
+    try {
+      setBundleError('');
+      console.log('Looking up phone number:', phone);
+
+      // Use getBundleByPhone for exact phone number lookup
+      const bundle = await getBundleByPhone(phone);
+      console.log('Bundle lookup result:', bundle);
+
+      setBundleBalance(bundle.amount);
+      setBundleId(bundle._id);
+
+      // If staff discount is enabled, handle staff bundle logic
+      if (state.currentOrder.staffDiscount && selectedStaff) {
+        console.log('Validating staff bundle:', {
+          bundleIsStaff: bundle.isStaff,
+          bundleStaffId: bundle.staffId,
+          selectedStaffId: selectedStaff.id
+        });
+
+        // If the bundle belongs to the selected staff member, that's perfect
+        if (bundle.isStaff && bundle.staffId?.toString() === selectedStaff.id) {
+          // This bundle belongs to the selected staff - proceed normally
+        }
+        // If it's a different staff bundle, show error
+        else if (bundle.isStaff && bundle.staffId?.toString() !== selectedStaff.id) {
+          setBundleError('This bundle belongs to a different staff member');
+          return;
+        }
+        // If it's a customer bundle, allow it but note it will be recorded under the staff member's name
+        else if (!bundle.isStaff) {
+          // Allow customer bundles to be used for staff purchases
+          // This will be recorded under the selected staff member's name
+          console.log('Using customer bundle for staff purchase');
+        }
+      }
+
+      // Check if bundle has sufficient balance
+      const total = calculatePreviewTotal();
+      if (bundle.amount < total) {
+        const deficit = total - bundle.amount;
+        if (deficit > 100) { // More than 100 over limit
+          setBundleError(`Insufficient balance. Need ${formatCurrency(deficit)} more. Maximum overdraft is ${formatCurrency(100)}`);
+          return;
+        } else {
+          setBundleError(`Balance will go negative by ${formatCurrency(deficit)}. Confirm to proceed.`);
+        }
+      }
+    } catch (error: any) {
+      console.error('Error looking up bundle:', error);
+
+      // Handle 404 specifically
+      if (error?.response?.status === 404) {
+        setBundleError('No bundle found for this phone number');
+      } else {
+        setBundleError('Error looking up bundle. Please try again.');
+      }
+
+      setBundleBalance(null);
+      setBundleId(null);
+    }
+  };
+
+  // Auto-find staff member's bundle
+  const handleAutoFindStaffBundle = async () => {
+    if (!selectedStaff) {
+      setBundleError('Please select a staff member first');
+      return;
+    }
+
+    try {
+      setBundleError('');
+      console.log('Auto-finding bundle for staff:', selectedStaff.id);
+
+      const bundle = await getBundleByStaffId(selectedStaff.id);
+      console.log('Staff bundle found:', bundle);
+
+      setBundleBalance(bundle.amount);
+      setBundleId(bundle._id);
+      setPhoneNumber(bundle.phoneNumber); // Auto-fill the phone number
+
+      // Check if bundle has sufficient balance
+      const total = calculatePreviewTotal();
+      if (bundle.amount < total) {
+        const deficit = total - bundle.amount;
+        if (deficit > 100) {
+          setBundleError(`Insufficient balance. Need ${formatCurrency(deficit)} more. Maximum overdraft is ${formatCurrency(100)}`);
+          return;
+        } else {
+          setBundleError(`Balance will go negative by ${formatCurrency(deficit)}. Confirm to proceed.`);
+        }
+      }
+    } catch (error: any) {
+      console.error('Error finding staff bundle:', error);
+
+      if (error?.response?.status === 404) {
+        setBundleError('No bundle found for this staff member');
+      } else {
+        setBundleError('Error finding staff bundle. Please try again.');
+      }
+
+      setBundleBalance(null);
+      setBundleId(null);
+    }
+  };
+
   // Handle closing receipt and resetting
   const handleCloseReceipt = () => {
     setReceiptModalOpen(false);
@@ -368,501 +543,625 @@ const CashierInterface: React.FC = () => {
 
     setStaffName('');
     setPaymentMethod('Cash');
+
+    // Reset bundle data
+    setPhoneNumber('');
+    setBundleBalance(null);
+    setBundleId(null);
+    setBundleError('');
   };
 
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-      {/* Products Section */}
-      <div className="lg:col-span-2">
-        <div className="mb-4">
-          <Input
-            type="text"
-            placeholder="Search products..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            fullWidth
-          />
+    <div className="space-y-6">
+      {/* Cashier Navigation */}
+      <div className="bg-white border-b border-gray-200 shadow-sm">
+        <div className="container mx-auto px-4">
+          <div className="flex space-x-4 overflow-x-auto py-2">
+            <button
+              onClick={() => dispatch({ type: 'SET_CASHIER_TAB', payload: 'pos' })}
+              className={`flex items-center space-x-2 px-3 py-2 rounded-md transition-colors ${state.cashierTab === 'pos'
+                ? 'bg-blue-100 text-blue-700'
+                : 'text-gray-600 hover:bg-gray-100'
+                }`}
+            >
+              <ShoppingCart size={20} />
+              <span className="font-medium">POS</span>
+            </button>
+            <button
+              onClick={() => dispatch({ type: 'SET_CASHIER_TAB', payload: 'bundles' })}
+              className={`flex items-center space-x-2 px-3 py-2 rounded-md transition-colors ${state.cashierTab === 'bundles'
+                ? 'bg-blue-100 text-blue-700'
+                : 'text-gray-600 hover:bg-gray-100'
+                }`}
+            >
+              <Wallet size={20} />
+              <span className="font-medium">Bundles</span>
+            </button>
+          </div>
         </div>
-        {categories.map(cat => (
-          <div key={cat._id} className="mb-6">
-            <h2 className="text-lg font-semibold text-gray-800 mb-3">{cat.name}</h2>
-            {(cat.subcategories || []).map((subcat: { name: string }) => (
-              <div key={subcat.name} className="mb-4">
-                <h3 className="text-md font-medium text-gray-700 mb-2">{subcat.name}</h3>
-                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
-                  {(productsByCategory[cat.name]?.[subcat.name] || []).length === 0 ? (
-                    <div className="text-gray-400 italic">No products</div>
-                  ) : (
-                    productsByCategory[cat.name][subcat.name].map(product => (
-                      <Card key={product._id} className="transform transition-transform duration-200 hover:scale-105">
-                        <CardBody className="p-4">
-                          <div className="flex flex-col h-full">
-                            <h3 className="font-medium text-gray-900">{product.name}</h3>
-                            <div className="mt-1 text-sm text-gray-600">
-                              {product.description}
-                            </div>
-                            <div className="mt-auto pt-4">
-                              <div className="flex justify-between items-center">
-                                <div className="text-lg font-semibold">
-                                  {state.currentOrder.staffDiscount ? (
-                                    <>
-                                      <span className="text-blue-600">${product.staffPrice.toFixed(2)}</span>
-                                      <span className="text-sm text-gray-500 line-through ml-2">
-                                        ${product.sellPrice.toFixed(2)}
-                                      </span>
-                                    </>
-                                  ) : (
-                                    <span>${product.sellPrice.toFixed(2)}</span>
+      </div>
+
+      {/* Content based on active tab */}
+      {state.cashierTab === 'pos' ? (
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          {/* Products Section */}
+          <div className="lg:col-span-2">
+            <div className="mb-4">
+              <Input
+                type="text"
+                placeholder="Search products..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                fullWidth
+              />
+            </div>
+            {categories.map(cat => (
+              <div key={cat._id} className="mb-6">
+                <h2 className="text-lg font-semibold text-gray-800 mb-3">{cat.name}</h2>
+                {(cat.subcategories || []).map((subcat: { name: string }) => (
+                  <div key={subcat.name} className="mb-4">
+                    <h3 className="text-md font-medium text-gray-700 mb-2">{subcat.name}</h3>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+                      {(productsByCategory[cat.name]?.[subcat.name] || []).length === 0 ? (
+                        <div className="text-gray-400 italic">No products</div>
+                      ) : (
+                        productsByCategory[cat.name][subcat.name].map(product => (
+                          <Card key={product._id} className="transform transition-transform duration-200 hover:scale-105">
+                            <CardBody className="p-4">
+                              <div className="flex flex-col h-full">
+                                <h3 className="font-medium text-gray-900">{product.name}</h3>
+                                <div className="mt-1 text-sm text-gray-600">
+                                  {product.description}
+                                </div>
+                                <div className="mt-auto pt-4">
+                                  <div className="flex justify-between items-center">
+                                    <div className="text-lg font-semibold">
+                                      {state.currentOrder.staffDiscount ? (
+                                        <>
+                                          <span className="text-blue-600">${product.staffPrice.toFixed(2)}</span>
+                                          <span className="text-sm text-gray-500 line-through ml-2">
+                                            ${product.sellPrice.toFixed(2)}
+                                          </span>
+                                        </>
+                                      ) : (
+                                        <span>${product.sellPrice.toFixed(2)}</span>
+                                      )}
+                                    </div>
+                                    <Button
+                                      variant="primary"
+                                      size="sm"
+                                      onClick={() => handleAddItem(product)}
+                                      disabled={!product.isAvailable || product.stock <= 0}
+                                    >
+                                      Add
+                                    </Button>
+                                  </div>
+                                  {product.stock <= 0 && (
+                                    <p className="text-red-500 text-sm mt-1">Out of stock</p>
+                                  )}
+                                  {product.stock > 0 && (
+                                    <p className="text-xs text-gray-500 mt-1">Stock: {product.stock}</p>
                                   )}
                                 </div>
-                                <Button
-                                  variant="primary"
-                                  size="sm"
-                                  onClick={() => handleAddItem(product)}
-                                  disabled={!product.isAvailable || product.stock <= 0}
-                                >
-                                  Add
-                                </Button>
                               </div>
-                              {product.stock <= 0 && (
-                                <p className="text-red-500 text-sm mt-1">Out of stock</p>
-                              )}
-                              {product.stock > 0 && (
-                                <p className="text-xs text-gray-500 mt-1">Stock: {product.stock}</p>
-                              )}
-                            </div>
-                          </div>
-                        </CardBody>
-                      </Card>
-                    ))
-                  )}
-                </div>
+                            </CardBody>
+                          </Card>
+                        ))
+                      )}
+                    </div>
+                  </div>
+                ))}
               </div>
             ))}
           </div>
-        ))}
-      </div>
 
-      {/* Order Section */}
-      <div>
-        <Card className="sticky top-4">
-          <CardHeader>
-            <h2 className="text-lg font-semibold text-gray-800">Current Order</h2>
-          </CardHeader>
+          {/* Order Section */}
+          <div>
+            <Card className="sticky top-4">
+              <CardHeader>
+                <h2 className="text-lg font-semibold text-gray-800">Current Order</h2>
+              </CardHeader>
 
-          <CardBody className="max-h-[calc(100vh-300px)] overflow-y-auto">
-            {state.currentOrder.items.length === 0 ? (
-              <div className="text-center py-8 text-gray-500">
-                No items in order yet
-              </div>
-            ) : (
-              <div className="space-y-4">                {state.currentOrder.items.map((item) => {                  // Check if this is a water bottle and if staff member has allowances
-                const isLargeWaterBottle = item.name.toLowerCase().includes('large water bottle');
-                const isSmallWaterBottle = item.name.toLowerCase().includes('small water bottle');
+              <CardBody className="max-h-[calc(100vh-300px)] overflow-y-auto">
+                {state.currentOrder.items.length === 0 ? (
+                  <div className="text-center py-8 text-gray-500">
+                    No items in order yet
+                  </div>
+                ) : (
+                  <div className="space-y-4">                {state.currentOrder.items.map((item) => {                  // Check if this is a water bottle and if staff member has allowances
+                    const isLargeWaterBottle = item.name.toLowerCase().includes('large water bottle');
+                    const isSmallWaterBottle = item.name.toLowerCase().includes('small water bottle');
 
-                // Determine free bottle count based on staff allowance
-                let freeBottleCount = 0;
-                if (state.currentOrder.staffDiscount && selectedStaff) {
-                  if (isLargeWaterBottle) {
-                    freeBottleCount = Math.min(selectedStaff.Large_bottles, item.quantity);
-                  } else if (isSmallWaterBottle) {
-                    freeBottleCount = Math.min(selectedStaff.Small_bottles, item.quantity);
-                  }
-                }
+                    // Determine free bottle count based on staff allowance
+                    let freeBottleCount = 0;
+                    if (state.currentOrder.staffDiscount && selectedStaff) {
+                      if (isLargeWaterBottle) {
+                        freeBottleCount = Math.min(selectedStaff.Large_bottles, item.quantity);
+                      } else if (isSmallWaterBottle) {
+                        freeBottleCount = Math.min(selectedStaff.Small_bottles, item.quantity);
+                      }
+                    }
 
-                return (
-                  <div key={item.productId} className="flex items-center justify-between border-b border-gray-100 pb-3">
-                    <div className="flex-1">
-                      <div className="font-medium">{item.name}</div>
-                      <div className="text-sm text-gray-500">
-                        ${item.price.toFixed(2)} × {item.quantity}
-                        {freeBottleCount > 0 && (
-                          <span className="ml-1 text-green-600 font-medium">
-                            ({freeBottleCount} free)
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                    <div className="flex items-center space-x-2">                      <div className="text-right">
-                      {freeBottleCount > 0 ? (
-                        <>
-                          <div className="font-medium">
-                            ${((item.quantity - freeBottleCount) * item.price).toFixed(2)}
+                    return (
+                      <div key={item.productId} className="flex items-center justify-between border-b border-gray-100 pb-3">
+                        <div className="flex-1">
+                          <div className="font-medium">{item.name}</div>
+                          <div className="text-sm text-gray-500">
+                            ${item.price.toFixed(2)} × {item.quantity}
+                            {freeBottleCount > 0 && (
+                              <span className="ml-1 text-green-600 font-medium">
+                                ({freeBottleCount} free)
+                              </span>
+                            )}
                           </div>
-                          <div className="text-xs text-green-600 font-medium">
-                            {freeBottleCount} × $0.00 (free)
-                          </div>
-                          {item.quantity - freeBottleCount > 0 && (
-                            <div className="text-xs text-gray-600">
-                              {item.quantity - freeBottleCount} × ${item.price.toFixed(2)}
+                        </div>
+                        <div className="flex items-center space-x-2">                      <div className="text-right">
+                          {freeBottleCount > 0 ? (
+                            <>
+                              <div className="font-medium">
+                                ${((item.quantity - freeBottleCount) * item.price).toFixed(2)}
+                              </div>
+                              <div className="text-xs text-green-600 font-medium">
+                                {freeBottleCount} × $0.00 (free)
+                              </div>
+                              {item.quantity - freeBottleCount > 0 && (
+                                <div className="text-xs text-gray-600">
+                                  {item.quantity - freeBottleCount} × ${item.price.toFixed(2)}
+                                </div>
+                              )}
+                            </>
+                          ) : (
+                            <div className="font-medium">
+                              ${(item.quantity * item.price).toFixed(2)}
                             </div>
                           )}
-                        </>
-                      ) : (
-                        <div className="font-medium">
-                          ${(item.quantity * item.price).toFixed(2)}
                         </div>
-                      )}
-                    </div>
-                      <div className="flex flex-col space-y-1">
-                        <Button
-                          variant="ghost"
-                          size="xs"
-                          onClick={() => handleUpdateQuantity(item.productId, item.quantity + 1)}
-                        >
-                          <ChevronUp size={14} />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="xs"
-                          onClick={() => handleUpdateQuantity(item.productId, item.quantity - 1)}
-                        >
-                          <ChevronDown size={14} />
-                        </Button>
+                          <div className="flex flex-col space-y-1">
+                            <Button
+                              variant="ghost"
+                              size="xs"
+                              onClick={() => handleUpdateQuantity(item.productId, item.quantity + 1)}
+                            >
+                              <ChevronUp size={14} />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="xs"
+                              onClick={() => handleUpdateQuantity(item.productId, item.quantity - 1)}
+                            >
+                              <ChevronDown size={14} />
+                            </Button>
+                          </div>
+                          <Button
+                            variant="ghost"
+                            size="xs"
+                            onClick={() => handleRemoveItem(item.productId)}
+                            className="text-red-600 hover:text-red-800"
+                          >
+                            <Trash2 size={14} />
+                          </Button>
+                        </div>
                       </div>
-                      <Button
-                        variant="ghost"
-                        size="xs"
-                        onClick={() => handleRemoveItem(item.productId)}
-                        className="text-red-600 hover:text-red-800"
-                      >
-                        <Trash2 size={14} />
-                      </Button>
+                    );
+                  })}
+                  </div>
+                )}
+              </CardBody>
+
+              <CardFooter className="border-t border-gray-200 bg-gray-50">
+                <div className="w-full space-y-4">              <div className="flex items-center justify-between">
+                  <Toggle
+                    label="Staff Discount"
+                    checked={state.currentOrder.staffDiscount}
+                    onChange={handleStaffDiscountToggle}
+                  />
+                  <p className="font-semibold text-lg">
+                    {state.currentOrder.staffDiscount && selectedStaff
+                      ? formatCurrency(calculatePreviewTotal())
+                      : formatCurrency(state.currentOrder.total)}
+                  </p>
+                </div>{state.currentOrder.staffDiscount && (
+                  <>
+                    <Select
+                      options={[
+                        { value: '', label: '-- Select Staff --' },
+                        ...staffList.map(staff => ({ value: staff.name, label: staff.name }))
+                      ]}
+                      label="Staff Name"
+                      value={staffName}
+                      onChange={handleStaffNameChange}
+                      fullWidth
+                    />
+                    {staffName && selectedStaff && (
+                      <div className="bg-white p-3 rounded-md border border-gray-200 mt-2">
+                        <div className="text-sm font-medium text-gray-800 mb-2">Water Bottle Allowance</div>
+
+                        {/* Large Water Bottles */}
+                        <div className="flex justify-between text-sm mb-1">
+                          <span className="text-gray-600">Large Bottles:</span>
+                          <span className="font-medium">{selectedStaff.Large_bottles} / 2</span>
+                        </div>
+                        <div className="w-full bg-gray-200 rounded-full h-2 mb-1">
+                          <div
+                            className="bg-blue-600 h-2 rounded-full"
+                            style={{ width: `${(selectedStaff.Large_bottles / 2) * 100}%` }}
+                          ></div>
+                        </div>
+
+                        {/* Show how many large bottles will be used from allowance in this order */}
+                        {state.currentOrder.items.some(item => item.name.toLowerCase().includes('large water bottle')) && (
+                          <div className="text-xs mb-3 flex justify-between">
+                            <span className="text-gray-500">In this order:</span>
+                            {(() => {
+                              const largeBottleItem = state.currentOrder.items.find(
+                                item => item.name.toLowerCase().includes('large water bottle')
+                              );
+                              const count = largeBottleItem ? Math.min(largeBottleItem.quantity, selectedStaff.Large_bottles) : 0;
+                              return (
+                                <span className={count > 0 ? "text-green-600 font-medium" : "text-gray-500"}>
+                                  {count > 0 ? `${count} bottle${count > 1 ? 's' : ''} free` : 'No free bottles'}
+                                </span>
+                              );
+                            })()}
+                          </div>
+                        )}
+
+                        {/* Small Water Bottles */}
+                        <div className="flex justify-between text-sm mb-1">
+                          <span className="text-gray-600">Small Bottles:</span>
+                          <span className="font-medium">{selectedStaff.Small_bottles} / 2</span>
+                        </div>
+                        <div className="w-full bg-gray-200 rounded-full h-2 mb-1">
+                          <div
+                            className="bg-teal-600 h-2 rounded-full"
+                            style={{ width: `${(selectedStaff.Small_bottles / 2) * 100}%` }}
+                          ></div>
+                        </div>
+
+                        {/* Show how many small bottles will be used from allowance in this order */}
+                        {state.currentOrder.items.some(item => item.name.toLowerCase().includes('small water bottle')) && (
+                          <div className="text-xs mb-1 flex justify-between">
+                            <span className="text-gray-500">In this order:</span>
+                            {(() => {
+                              const smallBottleItem = state.currentOrder.items.find(
+                                item => item.name.toLowerCase().includes('small water bottle')
+                              );
+                              const count = smallBottleItem ? Math.min(smallBottleItem.quantity, selectedStaff.Small_bottles) : 0;
+                              return (
+                                <span className={count > 0 ? "text-green-600 font-medium" : "text-gray-500"}>
+                                  {count > 0 ? `${count} bottle${count > 1 ? 's' : ''} free` : 'No free bottles'}
+                                </span>
+                              );
+                            })()}
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </>
+                )}<div className="flex space-x-2">
+                    <Button
+                      variant="outline"
+                      fullWidth
+                      onClick={() => {
+                        dispatch({ type: 'RESET_ORDER' });
+                        setStaffName('');
+                      }}
+                    >
+                      Cancel
+                    </Button>
+                    <Button
+                      variant="primary"
+                      fullWidth
+                      onClick={() => setPaymentModalOpen(true)}
+                      disabled={state.currentOrder.items.length === 0 || (state.currentOrder.staffDiscount && !staffName)}
+                    >
+                      Pay
+                    </Button>
+                  </div>
+                </div>
+              </CardFooter>
+            </Card>
+          </div>
+
+          {/* Payment Modal */}
+          <Modal
+            isOpen={paymentModalOpen}
+            onClose={() => setPaymentModalOpen(false)}
+            title="Payment"
+            size="sm"
+          >
+            <div className="space-y-6">
+              <div>
+                <h3 className="text-lg font-medium text-gray-900 mb-2">Select Payment Method</h3>
+                <div className="grid grid-cols-3 gap-4">
+                  <Button
+                    variant={paymentMethod === 'Cash' ? 'primary' : 'outline'}
+                    fullWidth
+                    onClick={() => setPaymentMethod('Cash')}
+                    leftIcon={<DollarSign size={18} />}
+                  >
+                    Cash
+                  </Button>
+                  <Button
+                    variant={paymentMethod === 'InstaPay' ? 'primary' : 'outline'}
+                    fullWidth
+                    onClick={() => setPaymentMethod('InstaPay')}
+                    leftIcon={<CreditCard size={18} />}
+                  >
+                    InstaPay
+                  </Button>
+                  <Button
+                    variant={paymentMethod === 'Bundles' ? 'primary' : 'outline'}
+                    fullWidth
+                    onClick={() => setPaymentMethod('Bundles')}
+                    leftIcon={<Wallet size={18} />}
+                  >
+                    Bundles
+                  </Button>
+                </div>
+                {paymentMethod === 'InstaPay' && (
+                  <div className="flex flex-col items-center mt-4">
+                    <img src={qrCodeImg} alt="InstaPay QR Code" className="w-72 h-72 object-contain border rounded shadow bg-white" style={{ background: '#fff', border: '1px solid #ddd' }} />
+                    <div className="mt-2 text-sm text-gray-700 text-center">
+                      Scan this QR code with your InstaPay app to pay.<br />
+                      <span className="font-mono text-xs text-gray-500">ahmedaraby2002@instapay</span>
                     </div>
                   </div>
-                );
-              })}
-              </div>
-            )}
-          </CardBody>
-
-          <CardFooter className="border-t border-gray-200 bg-gray-50">
-            <div className="w-full space-y-4">              <div className="flex items-center justify-between">
-              <Toggle
-                label="Staff Discount"
-                checked={state.currentOrder.staffDiscount}
-                onChange={handleStaffDiscountToggle}
-              />
-              <p className="font-semibold text-lg">
-                {state.currentOrder.staffDiscount && selectedStaff
-                  ? formatCurrency(calculatePreviewTotal())
-                  : formatCurrency(state.currentOrder.total)}
-              </p>
-            </div>{state.currentOrder.staffDiscount && (
-              <>
-                <Select
-                  options={[
-                    { value: '', label: '-- Select Staff --' },
-                    ...staffList.map(staff => ({ value: staff.name, label: staff.name }))
-                  ]}
-                  label="Staff Name"
-                  value={staffName}
-                  onChange={handleStaffNameChange}
-                  fullWidth
-                />
-                {staffName && selectedStaff && (
-                  <div className="bg-white p-3 rounded-md border border-gray-200 mt-2">
-                    <div className="text-sm font-medium text-gray-800 mb-2">Water Bottle Allowance</div>
-
-                    {/* Large Water Bottles */}
-                    <div className="flex justify-between text-sm mb-1">
-                      <span className="text-gray-600">Large Bottles:</span>
-                      <span className="font-medium">{selectedStaff.Large_bottles} / 2</span>
-                    </div>
-                    <div className="w-full bg-gray-200 rounded-full h-2 mb-1">
-                      <div
-                        className="bg-blue-600 h-2 rounded-full"
-                        style={{ width: `${(selectedStaff.Large_bottles / 2) * 100}%` }}
-                      ></div>
-                    </div>
-
-                    {/* Show how many large bottles will be used from allowance in this order */}
-                    {state.currentOrder.items.some(item => item.name.toLowerCase().includes('large water bottle')) && (
-                      <div className="text-xs mb-3 flex justify-between">
-                        <span className="text-gray-500">In this order:</span>
-                        {(() => {
-                          const largeBottleItem = state.currentOrder.items.find(
-                            item => item.name.toLowerCase().includes('large water bottle')
-                          );
-                          const count = largeBottleItem ? Math.min(largeBottleItem.quantity, selectedStaff.Large_bottles) : 0;
-                          return (
-                            <span className={count > 0 ? "text-green-600 font-medium" : "text-gray-500"}>
-                              {count > 0 ? `${count} bottle${count > 1 ? 's' : ''} free` : 'No free bottles'}
-                            </span>
-                          );
-                        })()}
+                )}
+                {paymentMethod === 'Bundles' && (
+                  <div className="mt-4 space-y-3">
+                    {/* Only show phone number input when staff discount is disabled */}
+                    {!state.currentOrder.staffDiscount && (
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                          Phone Number
+                        </label>
+                        <div className="flex space-x-2">
+                          <Input
+                            type="tel"
+                            placeholder="Enter phone number"
+                            value={phoneNumber}
+                            onChange={(e) => {
+                              setPhoneNumber(e.target.value);
+                              // Clear bundle data when phone changes
+                              setBundleBalance(null);
+                              setBundleId(null);
+                              setBundleError('');
+                            }}
+                            fullWidth
+                          />
+                          <Button
+                            variant="outline"
+                            onClick={() => handlePhoneLookup(phoneNumber)}
+                            disabled={!phoneNumber}
+                          >
+                            Lookup
+                          </Button>
+                        </div>
                       </div>
                     )}
 
-                    {/* Small Water Bottles */}
-                    <div className="flex justify-between text-sm mb-1">
-                      <span className="text-gray-600">Small Bottles:</span>
-                      <span className="font-medium">{selectedStaff.Small_bottles} / 2</span>
-                    </div>
-                    <div className="w-full bg-gray-200 rounded-full h-2 mb-1">
-                      <div
-                        className="bg-teal-600 h-2 rounded-full"
-                        style={{ width: `${(selectedStaff.Small_bottles / 2) * 100}%` }}
-                      ></div>
-                    </div>
+                    {/* Auto-find staff bundle button - only show when staff discount is enabled */}
+                    {state.currentOrder.staffDiscount && selectedStaff && (
+                      <div className="flex justify-center">
+                        <Button
+                          variant="outline"
+                          onClick={handleAutoFindStaffBundle}
+                          className="text-blue-600 border-blue-600 hover:bg-blue-50"
+                        >
+                          Auto-find {selectedStaff.name}'s Bundle
+                        </Button>
+                      </div>
+                    )}
 
-                    {/* Show how many small bottles will be used from allowance in this order */}
-                    {state.currentOrder.items.some(item => item.name.toLowerCase().includes('small water bottle')) && (
-                      <div className="text-xs mb-1 flex justify-between">
-                        <span className="text-gray-500">In this order:</span>
-                        {(() => {
-                          const smallBottleItem = state.currentOrder.items.find(
-                            item => item.name.toLowerCase().includes('small water bottle')
-                          );
-                          const count = smallBottleItem ? Math.min(smallBottleItem.quantity, selectedStaff.Small_bottles) : 0;
-                          return (
-                            <span className={count > 0 ? "text-green-600 font-medium" : "text-gray-500"}>
-                              {count > 0 ? `${count} bottle${count > 1 ? 's' : ''} free` : 'No free bottles'}
+                    {bundleError && (
+                      <div className={`text-sm p-2 rounded ${bundleError.includes('Confirm to proceed')
+                        ? 'bg-yellow-50 text-yellow-700'
+                        : 'bg-red-50 text-red-700'
+                        }`}>
+                        {bundleError}
+                      </div>
+                    )}
+
+                    {bundleBalance !== null && (
+                      <div className="text-sm text-gray-700 bg-blue-50 p-2 rounded">
+                        <div className="flex justify-between">
+                          <span>Current Balance:</span>
+                          <span className={bundleBalance < 0 ? 'text-red-600' : 'text-green-600'}>
+                            {formatCurrency(bundleBalance)}
+                          </span>
+                        </div>
+                        {bundleBalance < calculatePreviewTotal() && (
+                          <div className="flex justify-between mt-1">
+                            <span>After Purchase:</span>
+                            <span className="text-red-600">
+                              {formatCurrency(bundleBalance - calculatePreviewTotal())}
                             </span>
-                          );
-                        })()}
+                          </div>
+                        )}
                       </div>
                     )}
                   </div>
                 )}
-              </>
-            )}<div className="flex space-x-2">
+              </div>          <div className="border-t border-gray-200 pt-4">            <div className="flex justify-between mb-2">
+                <span className="font-medium">Subtotal:</span>
+                <span>{formatCurrency(calculatePreviewTotal())}</span>
+              </div>{state.currentOrder.staffDiscount && (
+                <>
+                  <div className="flex justify-between mb-2 text-blue-600">
+                    <span className="font-medium">Staff Discount:</span>
+                    <span>Applied</span>
+                  </div>
+                  {selectedStaff && staffName && (
+                    <div className="mb-2 text-gray-700 bg-gray-50 p-2 rounded-md">
+                      <div className="text-sm font-semibold mb-1">Water Bottle Allowance:</div>
+                      {state.currentOrder.items.some(item => item.name.toLowerCase().includes('large water bottle')) && (
+                        <div className="flex justify-between text-sm mb-1">
+                          <span>Large Bottles:</span>
+                          <span>{selectedStaff.Large_bottles} remaining</span>
+                        </div>
+                      )}
+                      {state.currentOrder.items.some(item => item.name.toLowerCase().includes('small water bottle')) && (
+                        <div className="flex justify-between text-sm">
+                          <span>Small Bottles:</span>
+                          <span>{selectedStaff.Small_bottles} remaining</span>
+                        </div>
+                      )}                    {state.currentOrder.items.some(item => item.name.toLowerCase().includes('large water bottle')) && (
+                        <div className="mt-1 text-sm">
+                          {(() => {
+                            const largeBottleItem = state.currentOrder.items.find(
+                              item => item.name.toLowerCase().includes('large water bottle')
+                            );
+                            const freeCount = Math.min(selectedStaff.Large_bottles, largeBottleItem?.quantity || 0);
+                            const paidCount = (largeBottleItem?.quantity || 0) - freeCount;
+
+                            return (
+                              <div className="mt-1">
+                                {freeCount > 0 && (
+                                  <div className="text-green-600 font-medium">
+                                    {freeCount} large bottle{freeCount > 1 ? 's' : ''} free
+                                  </div>
+                                )}
+                                {paidCount > 0 && (
+                                  <div className="text-gray-600">
+                                    {paidCount} large bottle{paidCount > 1 ? 's' : ''} will be charged
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          })()}
+                        </div>
+                      )}
+                      {state.currentOrder.items.some(item => item.name.toLowerCase().includes('small water bottle')) && (
+                        <div className="text-sm">
+                          {(() => {
+                            const smallBottleItem = state.currentOrder.items.find(
+                              item => item.name.toLowerCase().includes('small water bottle')
+                            );
+                            const freeCount = Math.min(selectedStaff.Small_bottles, smallBottleItem?.quantity || 0);
+                            const paidCount = (smallBottleItem?.quantity || 0) - freeCount;
+
+                            return (
+                              <div className="mt-1">
+                                {freeCount > 0 && (
+                                  <div className="text-green-600 font-medium">
+                                    {freeCount} small bottle{freeCount > 1 ? 's' : ''} free
+                                  </div>
+                                )}
+                                {paidCount > 0 && (
+                                  <div className="text-gray-600">
+                                    {paidCount} small bottle{paidCount > 1 ? 's' : ''} will be charged
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          })()}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </>
+              )}            <div className="flex justify-between font-bold text-lg mt-2 pt-2 border-t border-gray-200">
+                  <span>Total:</span>
+                  <span>{formatCurrency(calculatePreviewTotal())}</span>
+                </div>
+              </div>
+
+              <div className="flex space-x-3">
                 <Button
                   variant="outline"
                   fullWidth
-                  onClick={() => {
-                    dispatch({ type: 'RESET_ORDER' });
-                    setStaffName('');
-                  }}
+                  onClick={() => setPaymentModalOpen(false)}
+                  leftIcon={<X size={18} />}
                 >
                   Cancel
                 </Button>
                 <Button
-                  variant="primary"
+                  variant="success"
                   fullWidth
-                  onClick={() => setPaymentModalOpen(true)}
-                  disabled={state.currentOrder.items.length === 0 || (state.currentOrder.staffDiscount && !staffName)}
+                  onClick={handlePayment}
+                  leftIcon={<Check size={18} />}
                 >
-                  Pay
+                  Confirm
                 </Button>
               </div>
             </div>
-          </CardFooter>
-        </Card>
-      </div>
+          </Modal>
 
-      {/* Payment Modal */}
-      <Modal
-        isOpen={paymentModalOpen}
-        onClose={() => setPaymentModalOpen(false)}
-        title="Payment"
-        size="sm"
-      >
-        <div className="space-y-6">
-          <div>
-            <h3 className="text-lg font-medium text-gray-900 mb-2">Select Payment Method</h3>
-            <div className="grid grid-cols-2 gap-4">
-              <Button
-                variant={paymentMethod === 'Cash' ? 'primary' : 'outline'}
-                fullWidth
-                onClick={() => setPaymentMethod('Cash')}
-                leftIcon={<DollarSign size={18} />}
-              >
-                Cash
-              </Button>
-              <Button
-                variant={paymentMethod === 'InstaPay' ? 'primary' : 'outline'}
-                fullWidth
-                onClick={() => setPaymentMethod('InstaPay')}
-                leftIcon={<CreditCard size={18} />}
-              >
-                InstaPay
-              </Button>
-            </div>
-            {paymentMethod === 'InstaPay' && (
-              <div className="flex flex-col items-center mt-4">
-                <img src={qrCodeImg} alt="InstaPay QR Code" className="w-72 h-72 object-contain border rounded shadow bg-white" style={{ background: '#fff', border: '1px solid #ddd' }} />
-                <div className="mt-2 text-sm text-gray-700 text-center">
-                  Scan this QR code with your InstaPay app to pay.<br />
-                  <span className="font-mono text-xs text-gray-500">ahmedaraby2002@instapay</span>
+          {/* Receipt Modal */}
+          <Modal
+            isOpen={receiptModalOpen}
+            onClose={handleCloseReceipt}
+            title="Receipt"
+            size="sm"
+          >
+            <div className="space-y-4">
+              <div className="text-center border-b border-gray-200 pb-4">
+                <h3 className="font-bold text-xl">RECEIPT</h3>
+                <p className="text-gray-500 text-sm">{new Date().toLocaleString()}</p>
+              </div>          <div className="space-y-2">            {state.completedOrders[state.completedOrders.length - 1]?.items.map((item, index) => {
+                const isFreeItem = item.freeQuantity && item.freeQuantity > 0;
+                const freeQuantity = item.freeQuantity || 0;
+
+                // For display in the receipt, we want to show the full original price
+                // but we need to identify whether the item is partially/fully free
+                const displayAmount = item.price * item.quantity;
+
+                return (
+                  <div key={index} className="flex justify-between">
+                    <span>
+                      {item.name} x{item.quantity}
+                      {isFreeItem && <span className="text-green-600 text-xs ml-1">({freeQuantity} free)</span>}
+                    </span>
+                    <span>{formatCurrency(displayAmount)}</span>
+                  </div>
+                );
+              })}
+              </div>          <div className="border-t border-gray-200 pt-2 mt-2">
+                {state.completedOrders[state.completedOrders.length - 1]?.staffDiscount && (
+                  <>
+                    <div className="flex justify-between text-blue-600 text-sm">
+                      <span>Staff Discount</span>
+                      <span>Applied</span>
+                    </div>
+
+                    {/* Display water bottle allowance info */}
+                    {(state.completedOrders[state.completedOrders.length - 1]?.items.some(item =>
+                      item.name.toLowerCase().includes('water bottle') && item.freeQuantity)) && (
+                        <div className="text-green-600 text-sm mt-1">
+                          <span>Water Bottle Allowance Applied</span>
+                        </div>
+                      )}
+                  </>
+                )}<div className="flex justify-between font-bold mt-2">
+                  <span>TOTAL</span>
+                  <span>
+                    {formatCurrency(state.completedOrders[state.completedOrders.length - 1]?.total || 0)}
+                  </span>
+                </div>
+                <div className="flex justify-between text-sm text-gray-500 mt-1">
+                  <span>Payment Method</span>
+                  <span>{state.completedOrders[state.completedOrders.length - 1]?.paymentMethod}</span>
                 </div>
               </div>
-            )}
-          </div>          <div className="border-t border-gray-200 pt-4">            <div className="flex justify-between mb-2">
-            <span className="font-medium">Subtotal:</span>
-            <span>{formatCurrency(calculatePreviewTotal())}</span>
-          </div>{state.currentOrder.staffDiscount && (
-            <>
-              <div className="flex justify-between mb-2 text-blue-600">
-                <span className="font-medium">Staff Discount:</span>
-                <span>Applied</span>
+
+              <div className="border-t border-gray-200 pt-4 text-center">
+                <p className="text-sm text-gray-500">Thank you for your purchase!</p>
+                <Button
+                  variant="primary"
+                  fullWidth
+                  className="mt-4"
+                  onClick={handleCloseReceipt}
+                >
+                  Close
+                </Button>
               </div>
-              {selectedStaff && staffName && (
-                <div className="mb-2 text-gray-700 bg-gray-50 p-2 rounded-md">
-                  <div className="text-sm font-semibold mb-1">Water Bottle Allowance:</div>
-                  {state.currentOrder.items.some(item => item.name.toLowerCase().includes('large water bottle')) && (
-                    <div className="flex justify-between text-sm mb-1">
-                      <span>Large Bottles:</span>
-                      <span>{selectedStaff.Large_bottles} remaining</span>
-                    </div>
-                  )}
-                  {state.currentOrder.items.some(item => item.name.toLowerCase().includes('small water bottle')) && (
-                    <div className="flex justify-between text-sm">
-                      <span>Small Bottles:</span>
-                      <span>{selectedStaff.Small_bottles} remaining</span>
-                    </div>
-                  )}                    {state.currentOrder.items.some(item => item.name.toLowerCase().includes('large water bottle')) && (
-                    <div className="mt-1 text-sm">
-                      {(() => {
-                        const largeBottleItem = state.currentOrder.items.find(
-                          item => item.name.toLowerCase().includes('large water bottle')
-                        );
-                        const freeCount = Math.min(selectedStaff.Large_bottles, largeBottleItem?.quantity || 0);
-                        const paidCount = (largeBottleItem?.quantity || 0) - freeCount;
-
-                        return (
-                          <div className="mt-1">
-                            {freeCount > 0 && (
-                              <div className="text-green-600 font-medium">
-                                {freeCount} large bottle{freeCount > 1 ? 's' : ''} free
-                              </div>
-                            )}
-                            {paidCount > 0 && (
-                              <div className="text-gray-600">
-                                {paidCount} large bottle{paidCount > 1 ? 's' : ''} will be charged
-                              </div>
-                            )}
-                          </div>
-                        );
-                      })()}
-                    </div>
-                  )}
-                  {state.currentOrder.items.some(item => item.name.toLowerCase().includes('small water bottle')) && (
-                    <div className="text-sm">
-                      {(() => {
-                        const smallBottleItem = state.currentOrder.items.find(
-                          item => item.name.toLowerCase().includes('small water bottle')
-                        );
-                        const freeCount = Math.min(selectedStaff.Small_bottles, smallBottleItem?.quantity || 0);
-                        const paidCount = (smallBottleItem?.quantity || 0) - freeCount;
-
-                        return (
-                          <div className="mt-1">
-                            {freeCount > 0 && (
-                              <div className="text-green-600 font-medium">
-                                {freeCount} small bottle{freeCount > 1 ? 's' : ''} free
-                              </div>
-                            )}
-                            {paidCount > 0 && (
-                              <div className="text-gray-600">
-                                {paidCount} small bottle{paidCount > 1 ? 's' : ''} will be charged
-                              </div>
-                            )}
-                          </div>
-                        );
-                      })()}
-                    </div>
-                  )}
-                </div>
-              )}
-            </>
-          )}            <div className="flex justify-between font-bold text-lg mt-2 pt-2 border-t border-gray-200">
-              <span>Total:</span>
-              <span>{formatCurrency(calculatePreviewTotal())}</span>
             </div>
-          </div>
-
-          <div className="flex space-x-3">
-            <Button
-              variant="outline"
-              fullWidth
-              onClick={() => setPaymentModalOpen(false)}
-              leftIcon={<X size={18} />}
-            >
-              Cancel
-            </Button>
-            <Button
-              variant="success"
-              fullWidth
-              onClick={handlePayment}
-              leftIcon={<Check size={18} />}
-            >
-              Confirm
-            </Button>
-          </div>
+          </Modal>
         </div>
-      </Modal>
-
-      {/* Receipt Modal */}
-      <Modal
-        isOpen={receiptModalOpen}
-        onClose={handleCloseReceipt}
-        title="Receipt"
-        size="sm"
-      >
-        <div className="space-y-4">
-          <div className="text-center border-b border-gray-200 pb-4">
-            <h3 className="font-bold text-xl">RECEIPT</h3>
-            <p className="text-gray-500 text-sm">{new Date().toLocaleString()}</p>
-          </div>          <div className="space-y-2">            {state.completedOrders[state.completedOrders.length - 1]?.items.map((item, index) => {
-            const isFreeItem = item.freeQuantity && item.freeQuantity > 0;
-            const freeQuantity = item.freeQuantity || 0;
-
-            // For display in the receipt, we want to show the full original price
-            // but we need to identify whether the item is partially/fully free
-            const displayAmount = item.price * item.quantity;
-
-            return (
-              <div key={index} className="flex justify-between">
-                <span>
-                  {item.name} x{item.quantity}
-                  {isFreeItem && <span className="text-green-600 text-xs ml-1">({freeQuantity} free)</span>}
-                </span>
-                <span>{formatCurrency(displayAmount)}</span>
-              </div>
-            );
-          })}
-          </div>          <div className="border-t border-gray-200 pt-2 mt-2">
-            {state.completedOrders[state.completedOrders.length - 1]?.staffDiscount && (
-              <>
-                <div className="flex justify-between text-blue-600 text-sm">
-                  <span>Staff Discount</span>
-                  <span>Applied</span>
-                </div>
-
-                {/* Display water bottle allowance info */}
-                {(state.completedOrders[state.completedOrders.length - 1]?.items.some(item =>
-                  item.name.toLowerCase().includes('water bottle') && item.freeQuantity)) && (
-                    <div className="text-green-600 text-sm mt-1">
-                      <span>Water Bottle Allowance Applied</span>
-                    </div>
-                  )}
-              </>
-            )}<div className="flex justify-between font-bold mt-2">
-              <span>TOTAL</span>
-              <span>
-                {formatCurrency(state.completedOrders[state.completedOrders.length - 1]?.total || 0)}
-              </span>
-            </div>
-            <div className="flex justify-between text-sm text-gray-500 mt-1">
-              <span>Payment Method</span>
-              <span>{state.completedOrders[state.completedOrders.length - 1]?.paymentMethod}</span>
-            </div>
-          </div>
-
-          <div className="border-t border-gray-200 pt-4 text-center">
-            <p className="text-sm text-gray-500">Thank you for your purchase!</p>
-            <Button
-              variant="primary"
-              fullWidth
-              className="mt-4"
-              onClick={handleCloseReceipt}
-            >
-              Close
-            </Button>
-          </div>
-        </div>
-      </Modal>
+      ) : (
+        <BundleManagement />
+      )}
     </div>
   );
 };

@@ -85,8 +85,17 @@ const saleSchema = new mongoose.Schema({
     },
     paymentMethod: {
         type: String,
-        enum: ['Cash', 'InstaPay'],
+        enum: ['Cash', 'InstaPay', 'Bundles'],
         required: true
+    },
+    bundleId: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'Bundle',
+        required: false
+    },
+    bundlePhoneNumber: {
+        type: String,
+        required: false
     },
     createdBy: {
         type: mongoose.Schema.Types.ObjectId,

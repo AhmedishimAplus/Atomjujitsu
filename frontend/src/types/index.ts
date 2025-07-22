@@ -50,7 +50,7 @@ export interface Order {
   total: number;
   staffDiscount: boolean;
   staffName: string;
-  paymentMethod?: 'Cash' | 'InstaPay';
+  paymentMethod?: 'Cash' | 'InstaPay' | 'Bundles';
   timestamp: Date;
   completed: boolean;
 }
@@ -69,7 +69,7 @@ export type Transaction = {
   orderId: string;
   total: number;
   displayAmount?: number; // Add displayAmount field to match backend
-  paymentMethod: 'InstaPay' | 'Cash';
+  paymentMethod: 'InstaPay' | 'Cash' | 'Bundles';
   timestamp: Date;
   staffDiscount: boolean;
   staffName?: string;
@@ -96,3 +96,22 @@ export type Report = {
     };
   };
 };
+
+export interface Bundle {
+  _id: string;
+  phoneNumber: string;
+  amount: number;
+  isStaff: boolean;
+  staffName?: string;
+  staffId?: {
+    _id: string;
+    name: string;
+  };
+  createdBy: {
+    _id: string;
+    name: string;
+    email: string;
+  };
+  createdAt: string;
+  updatedAt: string;
+}

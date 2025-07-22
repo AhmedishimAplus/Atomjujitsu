@@ -312,4 +312,45 @@ export const getTopProductsMonth = async () => {
   return response.data;
 };
 
+// Bundle management endpoints
+export const getBundles = async (search?: string) => {
+  const response = await api.get('/bundles', { params: { search } });
+  return response.data;
+};
+
+export const getBundleByPhone = async (phoneNumber: string) => {
+  const response = await api.get(`/bundles/phone/${phoneNumber}`);
+  return response.data;
+};
+
+export const getBundleByStaffId = async (staffId: string) => {
+  const response = await api.get(`/bundles/staff/${staffId}`);
+  return response.data;
+};
+
+export const createBundle = async (bundleData: {
+  phoneNumber: string;
+  amount: number;
+  isStaff?: boolean;
+  staffId?: string;
+}) => {
+  const response = await api.post('/bundles', bundleData);
+  return response.data;
+};
+
+export const addFundsToBundle = async (bundleId: string, amount: number) => {
+  const response = await api.put(`/bundles/${bundleId}/add-funds`, { amount });
+  return response.data;
+};
+
+export const deductFromBundle = async (bundleId: string, amount: number) => {
+  const response = await api.put(`/bundles/${bundleId}/deduct`, { amount });
+  return response.data;
+};
+
+export const settleBundle = async (bundleId: string) => {
+  const response = await api.delete(`/bundles/${bundleId}`);
+  return response.data;
+};
+
 export default api;
