@@ -5,7 +5,7 @@ import Button from '../ui/Button';
 import Input from '../ui/Input';
 import Modal from '../ui/Modal';
 import { formatDate } from '../../utils/helpers';
-import { User, Droplet, Plus, Minus, Edit, UserPlus, Save, RefreshCw, Clock } from 'lucide-react';
+import { User, Droplet, Plus, Minus, Edit, UserPlus, Save, RefreshCw, Clock, Trash2 } from 'lucide-react';
 import { StaffMember } from '../../types';
 import * as staffApi from '../../services/staffApi';
 import * as api from '../../services/api';
@@ -22,8 +22,10 @@ const StaffManagement: React.FC = () => {
 
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [newStaffName, setNewStaffName] = useState('');
   const [editingStaff, setEditingStaff] = useState<StaffMember | null>(null);
+  const [deletingStaff, setDeletingStaff] = useState<StaffMember | null>(null);
   const [editStaffName, setEditStaffName] = useState('');
   const [nameError, setNameError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -233,6 +235,34 @@ const StaffManagement: React.FC = () => {
     setIsEditModalOpen(true);
   };
 
+  const openDeleteModal = (staff: StaffMember) => {
+    setDeletingStaff(staff);
+    setIsDeleteModalOpen(true);
+  };
+
+  const handleDeleteStaff = async () => {
+    if (!deletingStaff) return;
+
+    setIsLoading(true);
+    try {
+      await staffApi.deleteStaffMember(deletingStaff.id);
+
+      // Remove from local state
+      dispatch({ type: 'DELETE_STAFF', payload: deletingStaff.id });
+
+      setIsDeleteModalOpen(false);
+      setDeletingStaff(null);
+
+      // Refresh staff purchases to remove deleted staff from any lists
+      await fetchStaffPurchases();
+    } catch (error: any) {
+      console.error('Failed to delete staff member:', error);
+      alert(error?.response?.data?.error || 'Failed to delete staff member');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   // Fetch recent purchases for a specific staff member
   const fetchRecentPurchases = async (staffId: string) => {
     setIsLoadingRecentPurchases(true);
@@ -287,14 +317,24 @@ const StaffManagement: React.FC = () => {
                     <h3 className="text-lg font-medium text-gray-900">{staff.name}</h3>
                   </div>
                 </div>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => openEditModal(staff)}
-                  leftIcon={<Edit size={16} />}
-                >
-                  Edit
-                </Button>
+                <div className="flex gap-2">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => openEditModal(staff)}
+                    leftIcon={<Edit size={16} />}
+                  >
+                    Edit
+                  </Button>
+                  <Button
+                    variant="danger"
+                    size="sm"
+                    onClick={() => openDeleteModal(staff)}
+                    leftIcon={<Trash2 size={16} />}
+                  >
+                    Delete
+                  </Button>
+                </div>
               </div>
 
               <div className="mt-4 space-y-2">
@@ -389,7 +429,7 @@ const StaffManagement: React.FC = () => {
                 ) : null}
                 <div className="flex justify-end mt-2">
                   <Button
-                    variant="link"
+                    variant="ghost"
                     size="sm"
                     onClick={() => {
                       if (viewingRecentPurchases === staff.id) {
@@ -593,6 +633,55 @@ const StaffManagement: React.FC = () => {
               leftIcon={isLoading ? undefined : <Save size={18} />}
             >
               {isLoading ? 'Saving...' : 'Save Changes'}
+            </Button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* Delete Confirmation Modal */}
+      <Modal
+        isOpen={isDeleteModalOpen}
+        onClose={() => {
+          setIsDeleteModalOpen(false);
+          setDeletingStaff(null);
+        }}
+        title="Delete Staff Member"
+      >
+        <div className="p-6">
+          <div className="flex items-center justify-center w-12 h-12 mx-auto mb-4 bg-red-100 rounded-full">
+            <Trash2 className="w-6 h-6 text-red-600" />
+          </div>
+
+          <div className="text-center mb-6">
+            <h3 className="text-lg font-medium text-gray-900 mb-2">
+              Are you sure you want to delete this staff member?
+            </h3>
+            <p className="text-sm text-gray-500 mb-2">
+              Staff Member: <span className="font-medium">{deletingStaff?.name}</span>
+            </p>
+            <p className="text-sm text-gray-500">
+              This action cannot be undone. All associated data will be permanently deleted.
+            </p>
+          </div>
+
+          <div className="flex justify-end space-x-3">
+            <Button
+              variant="secondary"
+              onClick={() => {
+                setIsDeleteModalOpen(false);
+                setDeletingStaff(null);
+              }}
+              disabled={isLoading}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="danger"
+              onClick={handleDeleteStaff}
+              disabled={isLoading}
+              leftIcon={isLoading ? undefined : <Trash2 size={18} />}
+            >
+              {isLoading ? 'Deleting...' : 'Delete Staff Member'}
             </Button>
           </div>
         </div>
