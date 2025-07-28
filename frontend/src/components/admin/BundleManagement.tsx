@@ -18,13 +18,7 @@ import {
 } from '../../services/api';
 
 const BundleManagement: React.FC = () => {
-    const { state, dispatch } = useAppContext();
 
-    // Redirect non-admin users
-    if (state.user?.role !== 'Admin') {
-        dispatch({ type: 'SET_VIEW', payload: 'cashier' });
-        return <Navigate to="/" replace />;
-    }
 
     const [bundles, setBundles] = useState<Bundle[]>([]);
     const [searchTerm, setSearchTerm] = useState('');
